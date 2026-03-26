@@ -1,4 +1,5 @@
 import os
+import random
 from glob import glob
 from glog import logger
 from torch.utils.data import Dataset
@@ -18,17 +19,23 @@ class LRHRDataset(Dataset):
 
         self.files_lr = os.path.join(opt['dataroot'], phase, 'inputs')
         self.files_hr = os.path.join(opt['dataroot'], phase, 'gt')
-        
+
         lr_folders = os.listdir(self.files_lr)
         self.lr = []
         self.hr = []
-        
+
         for folder in lr_folders:
             self.lr.append(sorted(glob(os.path.join(self.files_lr, folder, '*.jpg')), key=self.extract_number))
             self.hr.extend(glob(os.path.join(self.files_hr, folder, '*.jpg')))
-            
-            
+
+
         assert len(self.lr) == len(self.hr)
+
+        # Limit dataset size if data_len is specified
+        data_len = opt.get('data_len', -1)
+        if data_len is not None and data_len > 0:
+            self.lr = self.lr[:data_len]
+            self.hr = self.hr[:data_len]
 
         # if self.opt.mode == 'train':
         self.transform_fn1 = aug.get_transforms(size=(height, width))
@@ -54,12 +61,13 @@ class LRHRDataset(Dataset):
     def __getitem__(self, idx):
         # print(self.lr[idx][0], self.lr[idx][1], self.lr[idx][2], self.hr[idx])
         assert len(self.lr[idx]) != 0, f'Not enough LR images for index {idx}: {self.lr[idx]} found, expected at least 1.'
-        if len(self.lr[idx]) < 3:
-            sample_id1, sample_id2, sample_id3  = 0, 1, 1
-            if len(self.lr[idx]) < 2:
-                sample_id1, sample_id2, sample_id3  = 0, 0, 0
+        n = len(self.lr[idx])
+        if n == 1:
+            sample_id1, sample_id2, sample_id3 = 0, 0, 0
+        elif n == 2:
+            sample_id1, sample_id2, sample_id3 = 0, 1, 1
         else:
-            sample_id1, sample_id2, sample_id3  = 0, 1, 2
+            sample_id1, sample_id2, sample_id3 = sorted(random.sample(range(n), 3))
         lr_image_1 = Image.open(self.lr[idx][sample_id1])
         lr_image_2 = Image.open(self.lr[idx][sample_id2])
         lr_image_3 = Image.open(self.lr[idx][sample_id3])        

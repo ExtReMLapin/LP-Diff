@@ -1,4 +1,4 @@
-data/
 dataset/
 venv/
 *.pyc
+*.log
