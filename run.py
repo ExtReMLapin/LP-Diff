@@ -245,7 +245,7 @@ if __name__ == "__main__":
             Metrics.save_img(
                 lr2_img, '{}/{}_lr2.png'.format(result_path, filename))
             Metrics.save_img(
-                lr2_img, '{}/{}_lr3.png'.format(result_path, filename))
+                lr3_img, '{}/{}_lr3.png'.format(result_path, filename))
             # Metrics.save_img(
             #     middle_img, '{}/{}_middle.png'.format(result_path, filename))
             
