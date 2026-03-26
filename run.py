@@ -159,16 +159,18 @@ if __name__ == "__main__":
 
                     avg_psnr = avg_psnr / idx
                     avg_val_loss = avg_val_loss / idx
-                    if avg_val_loss < best_loss and avg_psnr < best_psnr:
+                    loss_improved = avg_val_loss < best_loss
+                    psnr_improved = avg_psnr > best_psnr
+                    if loss_improved and psnr_improved:
+                        best_loss = avg_val_loss
+                        best_psnr = avg_psnr
+                        diffusion.save_best_both(current_epoch, current_step)
+                    elif loss_improved:
                         best_loss = avg_val_loss
                         diffusion.save_best_loss(current_epoch, current_step)
-                    elif avg_psnr > best_psnr and avg_val_loss > best_loss:
+                    elif psnr_improved:
                         best_psnr = avg_psnr
                         diffusion.save_best_psnr(current_epoch, current_step)
-                    elif avg_val_loss <= best_loss and avg_psnr >= best_psnr:
-                        best_psnr = avg_psnr
-                        best_loss = avg_val_loss
-                        diffusion.save_best_both(current_epoch, current_step)
                         
                     diffusion.set_new_noise_schedule(
                         opt['model']['beta_schedule']['train'], schedule_phase='train')
