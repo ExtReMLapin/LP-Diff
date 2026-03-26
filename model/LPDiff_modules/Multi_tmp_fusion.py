@@ -139,19 +139,23 @@ class ChannelAttention(nn.Module):
         super().__init__()
         self.avg_pool = nn.AdaptiveAvgPool2d(1)
         self.max_pool = nn.AdaptiveMaxPool2d(1)
-        self.median_pool = nn.AdaptiveMaxPool2d(1)
         self.k = kernel_size(in_channel)
         self.channel_conv1 = nn.Conv1d(6, 1, kernel_size=self.k, padding=self.k // 2)
         self.channel_conv2 = nn.Conv1d(6, 1, kernel_size=self.k, padding=self.k // 2)
         self.softmax = nn.Softmax(dim=0)
+
+    @staticmethod
+    def _median_pool(x):
+        b, c, h, w = x.shape
+        return x.view(b, c, -1).median(dim=-1).values.unsqueeze(-1).unsqueeze(-1)
 
     def forward(self, t1, t2):
         t1_channel_avg_pool = self.avg_pool(t1)
         t2_channel_avg_pool = self.avg_pool(t2)
         t1_channel_max_pool = self.max_pool(t1)
         t2_channel_max_pool = self.max_pool(t2)
-        t1_channel_median_pool = self.median_pool(t1)
-        t2_channel_median_pool = self.median_pool(t2)
+        t1_channel_median_pool = self._median_pool(t1)
+        t2_channel_median_pool = self._median_pool(t2)
         channel_pool = torch.cat([
             t1_channel_avg_pool, t1_channel_max_pool, t1_channel_median_pool,
             t2_channel_avg_pool, t2_channel_max_pool, t2_channel_median_pool
@@ -214,14 +218,18 @@ class InterframeAtt(nn.Module):
         super().__init__()
         self.avg_pool = nn.AdaptiveAvgPool2d(1)
         self.max_pool = nn.AdaptiveMaxPool2d(1)
-        self.median_pool = nn.AdaptiveMaxPool2d(1)
         self.channel_conv = nn.Conv1d(3, 1, kernel_size=3, padding=1)
         self.softmax = nn.Softmax(dim=0)
+
+    @staticmethod
+    def _median_pool(x):
+        b, c, h, w = x.shape
+        return x.view(b, c, -1).median(dim=-1).values.unsqueeze(-1).unsqueeze(-1)
 
     def forward(self, feature):
         feature_avg_pool = self.avg_pool(feature)
         feature_max_pool = self.max_pool(feature)
-        feature_median_pool = self.median_pool(feature)
+        feature_median_pool = self._median_pool(feature)
         feature_channel_cat = torch.cat([
             feature_avg_pool, feature_max_pool, feature_median_pool,
         ], dim=2).squeeze(-1).transpose(1, 2)
@@ -443,7 +451,7 @@ class CrossAttentionLayer(nn.Module):
         output = torch.matmul(attn, v)
         output = output.transpose(1, 2).contiguous().view(batch_size, -1, self.d_model)
         output = self.out_linear(output)
-        output = self.norm1(output + self.q_linear(f2))
+        output = self.norm1(output + f2)
         ff_output = self.fc2(F.relu(self.fc1(output)))
         output = self.norm2(ff_output + output)
         output = output.transpose(1, 2).view(batch_size, self.d_model, height, width)
@@ -569,7 +577,7 @@ class MTA(nn.Module):
     """
     def __init__(self, in_channel, out_channel):
         super().__init__()
-        inner_channel = 3
+        inner_channel = 64
         self.encoder = Encoder()
         self.decoder = Decoder()
         self.kaiming_init(self.encoder)
