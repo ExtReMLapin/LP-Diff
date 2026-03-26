@@ -16,18 +16,19 @@
         "train": {
             "name": "MDLP",
             "mode": "LRHR", 
-            "dataroot": "D:/ghy/python_project/SR/dataset/dataset",
+            "dataroot": "D:/torrent/LP-Diff/dataset/",
             "width": 224,
             "height": 112,
-            "batch_size": 20,
-            "num_workers": 0
+            "batch_size": 10,
+            "num_workers": 0,
+            "use_shuffle": true
         },
         "val": {
             "name": "MDLP",
             "mode": "LRHR",
             "width": 224,
             "height": 112,
-            "dataroot": "D:/ghy/python_project/SR/dataset/dataset"
+            "dataroot": "D:/torrent/LP-Diff/dataset/"
         }
     },
     "model": {
@@ -79,7 +80,7 @@
         "print_freq": 200,  
         "optimizer": {
             "type": "adam",
-            "lr": 5e-3      
+            "lr": 1e-4
         },
         "ema_scheduler": { // not used now
             "step_start_ema": 5000,
