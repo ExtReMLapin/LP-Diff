@@ -87,6 +87,62 @@ header h1 {
   cursor: pointer;
 }
 
+/* ── Metrics section ── */
+.metrics-section {
+  background: #161616;
+  border-bottom: 1px solid #2a2a2a;
+}
+
+.metrics-section.hidden { display: none; }
+
+.metrics-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 1.5rem;
+  cursor: pointer;
+  user-select: none;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #aaa;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.metrics-header:hover { color: #eee; }
+
+.metrics-chevron { font-size: 0.7rem; }
+
+.metrics-body { padding: 0.75rem 1rem 1rem; }
+
+.metrics-body.hidden { display: none; }
+
+.charts-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+}
+
+@media (max-width: 900px) {
+  .charts-row { grid-template-columns: 1fr; }
+}
+
+.chart-wrap {
+  background: #1a1a1a;
+  border: 1px solid #2a2a2a;
+  border-radius: 8px;
+  padding: 0.75rem;
+}
+
+.chart-title {
+  font-size: 0.75rem;
+  color: #888;
+  margin-bottom: 0.5rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
 /* ── Loading ── */
 .loading {
   padding: 2rem;

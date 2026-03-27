@@ -1,4 +1,3 @@
-import os
 import re
 from pathlib import Path
 from fastapi import FastAPI, HTTPException
@@ -90,3 +89,62 @@ def experiment_info(exp: str):
     plates = sorted(all_plates, key=lambda x: int(x))
 
     return {"epochs": epochs, "plates": plates, "data": data}
+
+
+# ── Log regexes ───────────────────────────────────────────────────────────────
+_RE_TRAIN_AVG = re.compile(
+    r"<epoch:\s*(\d+), iter:\s*([\d,]+)>\s+avg_train_loss:\s*([\d.e+\-]+)"
+)
+_RE_TRAIN_DETAIL = re.compile(
+    r"<epoch:\s*(\d+), iter:\s*([\d,]+)>\s+"
+    r"l_pix:\s*([\d.e+\-]+)\s+l_diffusion:\s*([\d.e+\-]+)\s+l_mta:\s*([\d.e+\-]+)\s+lr:\s*([\d.e+\-]+)"
+)
+_RE_VAL = re.compile(
+    r"<epoch:\s*(\d+), iter:\s*([\d,]+)>\s+psnr:\s*([\d.e+\-]+)\s+loss:\s*([\d.e+\-]+)"
+)
+
+
+def _parse_log(path: Path, regex) -> list:
+    if not path.exists():
+        return []
+    results = []
+    for line in path.read_text(errors="ignore").splitlines():
+        m = regex.search(line)
+        if m:
+            results.append(m.groups())
+    return results
+
+
+@app.get("/api/experiments/{exp}/metrics")
+def experiment_metrics(exp: str):
+    exp_dir = EXPERIMENTS_DIR / exp
+    if not exp_dir.exists():
+        raise HTTPException(status_code=404, detail="Experiment not found")
+
+    logs_dir = exp_dir / "logs"
+    train_log = logs_dir / "train.log"
+    val_log = logs_dir / "val.log"
+
+    # avg_train_loss per epoch
+    train = [
+        {"epoch": int(e), "iter": int(i.replace(",", "")), "avg_train_loss": float(v)}
+        for e, i, v in _parse_log(train_log, _RE_TRAIN_AVG)
+    ]
+
+    # detailed per-batch losses
+    train_detail = [
+        {
+            "epoch": int(e), "iter": int(i.replace(",", "")),
+            "l_pix": float(lp), "l_diffusion": float(ld),
+            "l_mta": float(lm), "lr": float(lr),
+        }
+        for e, i, lp, ld, lm, lr in _parse_log(train_log, _RE_TRAIN_DETAIL)
+    ]
+
+    # validation metrics
+    val = [
+        {"epoch": int(e), "iter": int(i.replace(",", "")), "psnr": float(p), "loss": float(l)}
+        for e, i, p, l in _parse_log(val_log, _RE_VAL)
+    ]
+
+    return {"train": train, "train_detail": train_detail, "val": val}

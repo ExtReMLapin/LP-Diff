@@ -24,6 +24,29 @@
     <span id="iter-label"></span>
   </div>
 
+  <div id="metrics-section" class="metrics-section hidden">
+    <div class="metrics-header" id="metrics-toggle">
+      <span>Metrics</span>
+      <span class="metrics-chevron" id="metrics-chevron">▼</span>
+    </div>
+    <div class="metrics-body" id="metrics-body">
+      <div class="charts-row">
+        <div class="chart-wrap">
+          <div class="chart-title">Train Loss</div>
+          <canvas id="chart-train"></canvas>
+        </div>
+        <div class="chart-wrap">
+          <div class="chart-title">Validation PSNR &amp; Loss</div>
+          <canvas id="chart-val"></canvas>
+        </div>
+        <div class="chart-wrap">
+          <div class="chart-title">Detailed Train Losses</div>
+          <canvas id="chart-detail"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div id="loading" class="loading hidden">Chargement…</div>
 
   <div id="grid" class="grid"></div>
@@ -38,6 +61,7 @@
     </div>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
   <script src="/static/app.js"></script>
 </body>
 </html>
