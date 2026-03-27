@@ -1,5 +1,6 @@
 import math
 import torch
+import torch.nn.functional as F
 from torch import nn
 from inspect import isfunction
 
@@ -53,10 +54,6 @@ class FeatureWiseAffine(nn.Module):
         return x
 
 
-class Swish(nn.Module):
-    def forward(self, x):
-        return x * torch.sigmoid(x)
-
 
 class Upsample(nn.Module):
     def __init__(self, dim):
@@ -85,7 +82,7 @@ class Block(nn.Module):
         super().__init__()
         self.block = nn.Sequential(
             nn.GroupNorm(groups, dim),
-            Swish(),
+            nn.SiLU(),
             nn.Dropout(dropout) if dropout != 0 else nn.Identity(),
             nn.Conv2d(dim, dim_out, 3, padding=1)
         )
@@ -130,17 +127,18 @@ class SelfAttention(nn.Module):
 
         norm = self.norm(input)
         qkv = self.qkv(norm).view(batch, n_head, head_dim * 3, height, width)
-        query, key, value = qkv.chunk(3, dim=2)  # bhdyx
+        query, key, value = qkv.chunk(3, dim=2)  # (B, n_head, head_dim, H, W)
 
-        attn = torch.einsum(
-            "bnchw, bncyx -> bnhwyx", query, key
-        ).contiguous() / math.sqrt(channel)
-        attn = attn.view(batch, n_head, height, width, -1)
-        attn = torch.softmax(attn, -1)
-        attn = attn.view(batch, n_head, height, width, height, width)
+        # Flatten spatial dims and swap to (B, n_head, HW, head_dim) for SDPA.
+        # F.scaled_dot_product_attention scales by 1/sqrt(head_dim) correctly
+        # (the old code divided by sqrt(channel) = sqrt(n_head * head_dim), which was wrong).
+        query = query.reshape(batch, n_head, head_dim, -1).transpose(2, 3)
+        key   = key.reshape(batch, n_head, head_dim, -1).transpose(2, 3)
+        value = value.reshape(batch, n_head, head_dim, -1).transpose(2, 3)
 
-        out = torch.einsum("bnhwyx, bncyx -> bnchw", attn, value).contiguous()
-        out = self.out(out.view(batch, channel, height, width))
+        out = F.scaled_dot_product_attention(query, key, value)  # (B, n_head, HW, head_dim)
+        out = out.transpose(2, 3).reshape(batch, channel, height, width)
+        out = self.out(out)
 
         return out + input
 
@@ -182,7 +180,7 @@ class UNet(nn.Module):
             self.noise_level_mlp = nn.Sequential(
                 PositionalEncoding(inner_channel),
                 nn.Linear(inner_channel, inner_channel * 4),
-                Swish(),
+                nn.SiLU(),
                 nn.Linear(inner_channel * 4, inner_channel)
             )
         else:
