@@ -259,15 +259,9 @@ class GaussianDiffusion(nn.Module):
         # x_start = x_in['HR']
         [b, c, h, w] = x_start.shape
         t = np.random.randint(1, self.num_timesteps + 1)
-        continuous_sqrt_alpha_cumprod = torch.FloatTensor(
-            np.random.uniform(
-                self.sqrt_alphas_cumprod_prev[t - 1],
-                self.sqrt_alphas_cumprod_prev[t],
-                size=b
-            )
-        ).to(x_start.device)
-        continuous_sqrt_alpha_cumprod = continuous_sqrt_alpha_cumprod.view(
-            b, -1)
+        low = float(self.sqrt_alphas_cumprod_prev[t])
+        high = float(self.sqrt_alphas_cumprod_prev[t - 1])
+        continuous_sqrt_alpha_cumprod = torch.empty(b, 1, device=x_start.device).uniform_(low, high)
 
         noise = default(noise, lambda: torch.randn_like(x_start))
         x_noisy = self.q_sample(

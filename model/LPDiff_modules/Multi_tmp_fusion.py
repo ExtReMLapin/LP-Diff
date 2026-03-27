@@ -201,7 +201,6 @@ class IntraframeAtt(nn.Module):
         super().__init__()
         self.channel_attention = ChannelAttention(in_channel)
         self.spatial_attention = SpatialAttention()
-        self.feature_fusion = FeatureFusion(in_channel*2, in_channel)
 
     def forward(self, t1, t2):
         channel_stack = self.channel_attention(t1, t2)
@@ -278,22 +277,15 @@ class GradientSelfAttention(nn.Module):
         super(GradientSelfAttention, self).__init__()
         self.channels = channels
         self.gamma = nn.Parameter(torch.zeros(1))
+        sobel_x = torch.tensor([[1, 0, -1], [2, 0, -2], [1, 0, -1]], dtype=torch.float32).view(1, 1, 3, 3).repeat(channels, 1, 1, 1)
+        sobel_y = torch.tensor([[1, 2, 1], [0, 0, 0], [-1, -2, -1]], dtype=torch.float32).view(1, 1, 3, 3).repeat(channels, 1, 1, 1)
+        self.register_buffer('sobel_kernel_x', sobel_x)
+        self.register_buffer('sobel_kernel_y', sobel_y)
 
     def forward(self, x):
         batch_size, C, H, W = x.size()
-        sobel_kernel_x = torch.tensor([[1, 0, -1],
-                                       [2, 0, -2],
-                                       [1, 0, -1]], dtype=torch.float32).unsqueeze(0).unsqueeze(0)
-        sobel_kernel_y = torch.tensor([[1, 2, 1],
-                                       [0, 0, 0],
-                                       [-1, -2, -1]], dtype=torch.float32).unsqueeze(0).unsqueeze(0)
-        sobel_kernel_x = sobel_kernel_x.repeat(C, 1, 1, 1)
-        sobel_kernel_y = sobel_kernel_y.repeat(C, 1, 1, 1)
-        if x.is_cuda:
-            sobel_kernel_x = sobel_kernel_x.cuda()
-            sobel_kernel_y = sobel_kernel_y.cuda()
-        grad_x = F.conv2d(x, sobel_kernel_x, padding=1, groups=C)
-        grad_y = F.conv2d(x, sobel_kernel_y, padding=1, groups=C)
+        grad_x = F.conv2d(x, self.sobel_kernel_x, padding=1, groups=C)
+        grad_y = F.conv2d(x, self.sobel_kernel_y, padding=1, groups=C)
         grad_magnitude = torch.sqrt(grad_x ** 2 + grad_y ** 2)
         attention_weights = torch.mean(grad_magnitude, dim=1, keepdim=True)
         attention_weights = torch.sigmoid(attention_weights)
@@ -317,22 +309,15 @@ class DirectionalConv(nn.Module):
         for conv in self.convs:
             nn.init.kaiming_normal_(conv.weight)
             nn.init.zeros_(conv.bias)
+        sobel_x = torch.tensor([[1, 0, -1], [2, 0, -2], [1, 0, -1]], dtype=torch.float32).view(1, 1, 3, 3).repeat(in_channels, 1, 1, 1)
+        sobel_y = torch.tensor([[1, 2, 1], [0, 0, 0], [-1, -2, -1]], dtype=torch.float32).view(1, 1, 3, 3).repeat(in_channels, 1, 1, 1)
+        self.register_buffer('sobel_kernel_x', sobel_x)
+        self.register_buffer('sobel_kernel_y', sobel_y)
 
     def forward(self, x):
         batch_size, C, H, W = x.size()
-        sobel_kernel_x = torch.tensor([[1, 0, -1],
-                                       [2, 0, -2],
-                                       [1, 0, -1]], dtype=torch.float32).unsqueeze(0).unsqueeze(0)
-        sobel_kernel_y = torch.tensor([[1, 2, 1],
-                                       [0, 0, 0],
-                                       [-1, -2, -1]], dtype=torch.float32).unsqueeze(0).unsqueeze(0)
-        sobel_kernel_x = sobel_kernel_x.repeat(C, 1, 1, 1)
-        sobel_kernel_y = sobel_kernel_y.repeat(C, 1, 1, 1)
-        if x.is_cuda:
-            sobel_kernel_x = sobel_kernel_x.cuda()
-            sobel_kernel_y = sobel_kernel_y.cuda()
-        grad_x = F.conv2d(x, sobel_kernel_x, padding=1, groups=C)
-        grad_y = F.conv2d(x, sobel_kernel_y, padding=1, groups=C)
+        grad_x = F.conv2d(x, self.sobel_kernel_x, padding=1, groups=C)
+        grad_y = F.conv2d(x, self.sobel_kernel_y, padding=1, groups=C)
         theta = torch.atan2(grad_y, grad_x)
         theta_quantized = ((theta + np.pi) / (2 * np.pi) * self.num_directions).long() % self.num_directions
         out = torch.zeros(batch_size, self.out_channels, H, W).to(x.device)
@@ -510,38 +495,22 @@ class GradientCurvatureAttention(nn.Module):
         self.alpha = alpha
         self.beta = beta
         self.softmax = nn.Softmax(dim=1)
+        self.register_buffer('sobel_kernel_x', torch.tensor([[1, 0, -1], [2, 0, -2], [1, 0, -1]], dtype=torch.float32).view(1, 1, 3, 3))
+        self.register_buffer('sobel_kernel_y', torch.tensor([[1, 2, 1], [0, 0, 0], [-1, -2, -1]], dtype=torch.float32).view(1, 1, 3, 3))
+        self.register_buffer('kernel_xx', torch.tensor([[1, -2, 1], [2, -4, 2], [1, -2, 1]], dtype=torch.float32).view(1, 1, 3, 3))
+        self.register_buffer('kernel_yy', torch.tensor([[1, 2, 1], [-2, -4, -2], [1, 2, 1]], dtype=torch.float32).view(1, 1, 3, 3))
+        self.register_buffer('kernel_xy', torch.tensor([[-1, 0, 1], [0, 0, 0], [1, 0, -1]], dtype=torch.float32).view(1, 1, 3, 3))
 
     def forward(self, x):
         batch_size, channels, height, width = x.size()
-        device = x.device
-        sobel_kernel_x = torch.tensor([[1, 0, -1],
-                                       [2, 0, -2],
-                                       [1, 0, -1]], dtype=torch.float32, device=device)
-        sobel_kernel_y = torch.tensor([[1, 2, 1],
-                                       [0, 0, 0],
-                                       [-1, -2, -1]], dtype=torch.float32, device=device)
-        sobel_kernel_x = sobel_kernel_x.unsqueeze(0).unsqueeze(0)
-        sobel_kernel_y = sobel_kernel_y.unsqueeze(0).unsqueeze(0)
-        sobel_kernel_x = sobel_kernel_x.repeat(channels, 1, 1, 1)
-        sobel_kernel_y = sobel_kernel_y.repeat(channels, 1, 1, 1)
+        sobel_kernel_x = self.sobel_kernel_x.repeat(channels, 1, 1, 1)
+        sobel_kernel_y = self.sobel_kernel_y.repeat(channels, 1, 1, 1)
         Gx = F.conv2d(x, sobel_kernel_x, padding=1, groups=channels)
         Gy = F.conv2d(x, sobel_kernel_y, padding=1, groups=channels)
         gradient_magnitude = torch.sqrt(Gx ** 2 + Gy ** 2 + 1e-6)
-        kernel_xx = torch.tensor([[1, -2, 1],
-                                  [2, -4, 2],
-                                  [1, -2, 1]], dtype=torch.float32, device=device)
-        kernel_yy = torch.tensor([[1, 2, 1],
-                                  [-2, -4, -2],
-                                  [1, 2, 1]], dtype=torch.float32, device=device)
-        kernel_xy = torch.tensor([[-1, 0, 1],
-                                  [0, 0, 0],
-                                  [1, 0, -1]], dtype=torch.float32, device=device)
-        kernel_xx = kernel_xx.unsqueeze(0).unsqueeze(0)
-        kernel_yy = kernel_yy.unsqueeze(0).unsqueeze(0)
-        kernel_xy = kernel_xy.unsqueeze(0).unsqueeze(0)
-        kernel_xx = kernel_xx.repeat(channels, 1, 1, 1)
-        kernel_yy = kernel_yy.repeat(channels, 1, 1, 1)
-        kernel_xy = kernel_xy.repeat(channels, 1, 1, 1)
+        kernel_xx = self.kernel_xx.repeat(channels, 1, 1, 1)
+        kernel_yy = self.kernel_yy.repeat(channels, 1, 1, 1)
+        kernel_xy = self.kernel_xy.repeat(channels, 1, 1, 1)
         Ixx = F.conv2d(x, kernel_xx, padding=1, groups=channels)
         Iyy = F.conv2d(x, kernel_yy, padding=1, groups=channels)
         Ixy = F.conv2d(x, kernel_xy, padding=1, groups=channels)

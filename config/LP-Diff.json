@@ -29,7 +29,7 @@
             "width": 224,
             "height": 112,
             "dataroot": "/home/pierre/dataset_plaques/",
-            "val_batch_size": 50,
+            "val_batch_size": 300,
             "data_len": 50
         }
     },

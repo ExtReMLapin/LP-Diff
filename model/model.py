@@ -16,11 +16,13 @@ class DDPM(BaseModel):
         super(DDPM, self).__init__(opt)
         # define network and load pretrained models
         self.netG = self.set_device(networks.define_G(opt))
+
+
         self.schedule_phase = None
         if opt['distributed']:
             assert torch.cuda.is_available()
             self.netG = nn.parallel.DistributedDataParallel(
-                self.netG, device_ids=[self.local_rank], find_unused_parameters=True)
+                self.netG, device_ids=[self.local_rank], find_unused_parameters=False)
 
         # set loss and load resume state
         self.set_loss()
@@ -48,7 +50,7 @@ class DDPM(BaseModel):
                 optim_params = list(self.netG.parameters())
 
             self.optG = torch.optim.Adam(
-                optim_params, lr=opt['train']["optimizer"]["lr"])
+                optim_params, lr=opt['train']["optimizer"]["lr"], fused=True)
             self.scheduler = CosineAnnealingLR(
                 self.optG,
                 T_max=opt['train']['n_iter'],
@@ -77,7 +79,7 @@ class DDPM(BaseModel):
         self.data = self.set_device(data)
 
     def optimize_parameters(self):
-        self.optG.zero_grad()
+        self.optG.zero_grad(set_to_none=True)
         with autocast(device_type='cuda', dtype=torch.bfloat16):
             l_pix, l_diffusion, l_mta = self.netG(self.data)
             b, c, h, w = self.data['HR'].shape
