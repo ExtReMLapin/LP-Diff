@@ -18,6 +18,11 @@ class DDPM(BaseModel):
 
         # set loss and load resume state
         self.set_loss()
+        lambda_mta = opt['train'].get('lambda_mta', 1.0)
+        if isinstance(self.netG, nn.DataParallel):
+            self.netG.module.set_lambda_mta(lambda_mta)
+        else:
+            self.netG.set_lambda_mta(lambda_mta)
         self.set_new_noise_schedule(
             opt['model']['beta_schedule']['train'], schedule_phase='train')
         if self.opt['phase'] == 'train':

@@ -112,6 +112,10 @@ class GaussianDiffusion(nn.Module):
             self.loss_func = nn.MSELoss(reduction='sum').to(device)
         else:
             raise NotImplementedError()
+        self.lambda_mta = 1.0
+
+    def set_lambda_mta(self, lambda_mta):
+        self.lambda_mta = lambda_mta
 
     def set_new_noise_schedule(self, schedule_opt, device):
         to_torch = partial(torch.tensor, dtype=torch.float32, device=device)
@@ -282,7 +286,10 @@ class GaussianDiffusion(nn.Module):
                 torch.cat([condition, x_noisy], dim=1), continuous_sqrt_alpha_cumprod)
 
         loss = self.loss_func(noise, x_recon)
-        return loss
+        # Direct supervision of MTA: force condition ≈ HR so the diffusion
+        # receives a meaningful conditioning signal instead of hallucinating.
+        loss_mta = F.l1_loss(condition, x_in['HR'], reduction='sum')
+        return loss + self.lambda_mta * loss_mta
 
     def forward(self, x, *args, **kwargs):
         return self.p_losses(x, *args, **kwargs)
