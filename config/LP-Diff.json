@@ -20,7 +20,7 @@
             "width": 224,
             "height": 112,
             "batch_size": 5,
-            "num_workers": 0,
+            "num_workers": 8,
             "use_shuffle": true
         },
         "val": {

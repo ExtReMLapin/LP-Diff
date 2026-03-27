@@ -285,11 +285,11 @@ class GaussianDiffusion(nn.Module):
             x_recon = self.denoise_fn(
                 torch.cat([condition, x_noisy], dim=1), continuous_sqrt_alpha_cumprod)
 
-        loss = self.loss_func(noise, x_recon)
+        loss_diffusion = self.loss_func(noise, x_recon)
         # Direct supervision of MTA: force condition ≈ HR so the diffusion
         # receives a meaningful conditioning signal instead of hallucinating.
         loss_mta = F.l1_loss(condition, x_in['HR'], reduction='sum')
-        return loss + self.lambda_mta * loss_mta
+        return loss_diffusion + self.lambda_mta * loss_mta, loss_diffusion, loss_mta
 
     def forward(self, x, *args, **kwargs):
         return self.p_losses(x, *args, **kwargs)

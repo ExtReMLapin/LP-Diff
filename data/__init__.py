@@ -13,10 +13,13 @@ def create_dataloader(dataset, dataset_opt, phase, sampler=None):
             shuffle=(dataset_opt['use_shuffle'] and sampler is None),
             num_workers=dataset_opt['num_workers'],
             pin_memory=True,
+            persistent_workers=(dataset_opt['num_workers'] > 0),
+            prefetch_factor=(2 if dataset_opt['num_workers'] > 0 else None),
             sampler=sampler)
     elif phase == 'val':
         return torch.utils.data.DataLoader(
-            dataset, batch_size=1, shuffle=False, num_workers=0, pin_memory=True)
+            dataset, batch_size=1, shuffle=False, num_workers=0,
+            pin_memory=True, sampler=sampler)
     else:
         raise NotImplementedError(
             'Dataloader [{:s}] is not found.'.format(phase))

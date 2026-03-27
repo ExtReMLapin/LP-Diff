@@ -6,6 +6,8 @@ import torch.nn as nn
 import os
 import model.networks as networks
 from .base_model import BaseModel
+from torch.amp import autocast
+from torch.optim.lr_scheduler import CosineAnnealingLR
 logger = logging.getLogger('base')
 
 
@@ -47,6 +49,10 @@ class DDPM(BaseModel):
 
             self.optG = torch.optim.Adam(
                 optim_params, lr=opt['train']["optimizer"]["lr"])
+            self.scheduler = CosineAnnealingLR(
+                self.optG,
+                T_max=opt['train']['n_iter'],
+                eta_min=opt['train']['optimizer'].get('lr_min', 1e-6))
             self.log_dict = OrderedDict()
         
             if opt['train']['resume_training']:
@@ -72,15 +78,24 @@ class DDPM(BaseModel):
 
     def optimize_parameters(self):
         self.optG.zero_grad()
-        l_pix = self.netG(self.data)
-        # need to average in multi-gpu
-        b, c, h, w = self.data['HR'].shape
-        l_pix = l_pix.sum()/int(b*c*h*w)
+        with autocast(device_type='cuda', dtype=torch.bfloat16):
+            l_pix, l_diffusion, l_mta = self.netG(self.data)
+            b, c, h, w = self.data['HR'].shape
+            norm = int(b * c * h * w)
+            l_pix = l_pix.sum() / norm
+            l_diffusion = l_diffusion.sum() / norm
+            l_mta = l_mta.sum() / norm
         l_pix.backward()
+        torch.nn.utils.clip_grad_norm_(self.netG.parameters(), max_norm=1.0)
         self.optG.step()
+        if hasattr(self, 'scheduler'):
+            self.scheduler.step()
 
         # set log
         self.log_dict['l_pix'] = l_pix.item()
+        self.log_dict['l_diffusion'] = l_diffusion.item()
+        self.log_dict['l_mta'] = l_mta.item()
+        self.log_dict['lr'] = self.optG.param_groups[0]['lr']
 
     def test(self, continous=False):
         self.netG.eval()
@@ -177,7 +192,9 @@ class DDPM(BaseModel):
             state_dict[key] = param.cpu()
         torch.save(state_dict, gen_path)
         # opt
-        opt_state = {'epoch': epoch, 'iter': iter_step,'scheduler': None, 'optimizer': None}
+        opt_state = {'epoch': epoch, 'iter': iter_step,
+                     'scheduler': self.scheduler.state_dict() if hasattr(self, 'scheduler') else None,
+                     'optimizer': None}
         opt_state['optimizer'] = self.optG.state_dict()
         torch.save(opt_state, opt_path)
 
@@ -198,7 +215,9 @@ class DDPM(BaseModel):
             state_dict[key] = param.cpu()
         torch.save(state_dict, gen_path)
         # opt
-        opt_state = {'epoch': epoch, 'iter': iter_step,'scheduler': None, 'optimizer': None}
+        opt_state = {'epoch': epoch, 'iter': iter_step,
+                     'scheduler': self.scheduler.state_dict() if hasattr(self, 'scheduler') else None,
+                     'optimizer': None}
         opt_state['optimizer'] = self.optG.state_dict()
         torch.save(opt_state, opt_path)
 
@@ -219,7 +238,9 @@ class DDPM(BaseModel):
             state_dict[key] = param.cpu()
         torch.save(state_dict, gen_path)
         # opt
-        opt_state = {'epoch': epoch, 'iter': iter_step,'scheduler': None, 'optimizer': None}
+        opt_state = {'epoch': epoch, 'iter': iter_step,
+                     'scheduler': self.scheduler.state_dict() if hasattr(self, 'scheduler') else None,
+                     'optimizer': None}
         opt_state['optimizer'] = self.optG.state_dict()
         torch.save(opt_state, opt_path)
 
@@ -240,7 +261,9 @@ class DDPM(BaseModel):
             state_dict[key] = param.cpu()
         torch.save(state_dict, gen_path)
         # opt
-        opt_state = {'epoch': epoch, 'iter': iter_step,'scheduler': None, 'optimizer': None}
+        opt_state = {'epoch': epoch, 'iter': iter_step,
+                     'scheduler': self.scheduler.state_dict() if hasattr(self, 'scheduler') else None,
+                     'optimizer': None}
         opt_state['optimizer'] = self.optG.state_dict()
         torch.save(opt_state, opt_path)
 
@@ -256,7 +279,7 @@ class DDPM(BaseModel):
             opt_path = '{}_opt.pth'.format(load_path)
             # gen
             network = self.netG
-            if isinstance(self.netG, nn.DataParallel):
+            if isinstance(self.netG, (nn.DataParallel, nn.parallel.DistributedDataParallel)):
                 network = network.module
             network.load_state_dict(torch.load(
                 gen_path), strict=(not self.opt['model']['finetune_norm']))
@@ -266,5 +289,7 @@ class DDPM(BaseModel):
                 # optimizer
                 opt = torch.load(opt_path)
                 self.optG.load_state_dict(opt['optimizer'])
+                if opt.get('scheduler') is not None and hasattr(self, 'scheduler'):
+                    self.scheduler.load_state_dict(opt['scheduler'])
                 self.begin_step = opt['iter']
                 self.begin_epoch = opt['epoch']

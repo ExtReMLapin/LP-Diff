@@ -90,8 +90,12 @@ if __name__ == "__main__":
                 train_set, dataset_opt, phase, sampler=train_sampler)
         elif phase == 'val':
             val_set = Data.create_dataset(dataset_opt, phase)
+            val_sampler = (
+                torch.utils.data.distributed.DistributedSampler(val_set, shuffle=False)
+                if world_size > 1 else None
+            )
             val_loader = Data.create_dataloader(
-                val_set, dataset_opt, phase)
+                val_set, dataset_opt, phase, sampler=val_sampler)
     if rank == 0:
         logger.info('Initial Dataset Finished')
 
@@ -206,8 +210,17 @@ if __name__ == "__main__":
                             np.concatenate((lr1_img, lr2_img, lr3_img, sr_img, hr_img), axis=1)
                         )
 
-                avg_psnr = avg_psnr / idx
-                avg_val_loss = avg_val_loss / idx
+                # Aggregate metrics across all GPUs
+                if world_size > 1:
+                    metrics = torch.tensor(
+                        [float(avg_psnr), float(avg_val_loss), float(idx)],
+                        device=f'cuda:{local_rank}')
+                    dist.all_reduce(metrics, op=dist.ReduceOp.SUM)
+                    avg_psnr = (metrics[0] / metrics[2]).item()
+                    avg_val_loss = (metrics[1] / metrics[2]).item()
+                else:
+                    avg_psnr = avg_psnr / idx
+                    avg_val_loss = avg_val_loss / idx
                 loss_improved = avg_val_loss < best_loss
                 psnr_improved = avg_psnr > best_psnr
                 if rank == 0:
