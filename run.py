@@ -89,12 +89,16 @@ if __name__ == "__main__":
     if opt['phase'] == 'train':
         while current_step < n_iter:
             current_epoch += 1
+            epoch_loss_sum = 0.0
+            epoch_loss_count = 0
             for _, train_data in enumerate(train_loader):
                 current_step += 1
                 if current_step > n_iter:
                     break
                 diffusion.feed_data(train_data)
                 diffusion.optimize_parameters()
+                epoch_loss_sum += diffusion.get_current_log().get('l_pix', 0.0)
+                epoch_loss_count += 1
                 # log
                 if current_step % opt['train']['print_freq'] == 0:
                     logs = diffusion.get_current_log()
@@ -114,6 +118,10 @@ if __name__ == "__main__":
 
                     if wandb_logger and opt['log_wandb_ckpt']:
                         wandb_logger.log_checkpoint(current_epoch, current_step)
+
+            avg_train_loss = epoch_loss_sum / max(epoch_loss_count, 1)
+            logger.info('<epoch:{:3d}, iter:{:8,d}> avg_train_loss: {:.4e}'.format(
+                current_epoch, current_step, avg_train_loss))
 
             # end-of-epoch validation (after warm-up)
             warm_up = opt['train'].get('val_warmup_epochs', 5)
@@ -181,7 +189,7 @@ if __name__ == "__main__":
                 diffusion.set_new_noise_schedule(
                     opt['model']['beta_schedule']['train'], schedule_phase='train')
                 # log
-                logger.info('# Validation # PSNR: {:.4e}'.format(avg_psnr))
+                logger.info('# Validation # PSNR: {:.4e}  val_loss: {:.4e}'.format(avg_psnr, avg_val_loss))
                 logger_val = logging.getLogger('val')  # validation logger
                 logger_val.info('<epoch:{:3d}, iter:{:8,d}> psnr: {:.4e} loss: {:.4e}'.format(
                     current_epoch, current_step, avg_psnr, avg_val_loss))
