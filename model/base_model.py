@@ -6,8 +6,9 @@ import torch.nn as nn
 class BaseModel():
     def __init__(self, opt):
         self.opt = opt
+        self.local_rank = opt.get('local_rank', 0)
         self.device = torch.device(
-            'cuda' if opt['gpu_ids'] is not None else 'cpu')
+            'cuda:{}'.format(self.local_rank) if opt['gpu_ids'] is not None else 'cpu')
         self.begin_step = 0
         self.begin_epoch = 0
 
@@ -44,7 +45,7 @@ class BaseModel():
 
     def get_network_description(self, network):
         '''Get the string and total parameters of the network'''
-        if isinstance(network, nn.DataParallel):
+        if isinstance(network, (nn.DataParallel, nn.parallel.DistributedDataParallel)):
             network = network.module
         s = str(network)
         n = sum(map(lambda x: x.numel(), network.parameters()))

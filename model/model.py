@@ -15,11 +15,15 @@ class DDPM(BaseModel):
         # define network and load pretrained models
         self.netG = self.set_device(networks.define_G(opt))
         self.schedule_phase = None
+        if opt['distributed']:
+            assert torch.cuda.is_available()
+            self.netG = nn.parallel.DistributedDataParallel(
+                self.netG, device_ids=[self.local_rank])
 
         # set loss and load resume state
         self.set_loss()
         lambda_mta = opt['train'].get('lambda_mta', 1.0)
-        if isinstance(self.netG, nn.DataParallel):
+        if isinstance(self.netG, (nn.DataParallel, nn.parallel.DistributedDataParallel)):
             self.netG.module.set_lambda_mta(lambda_mta)
         else:
             self.netG.set_lambda_mta(lambda_mta)
@@ -50,7 +54,10 @@ class DDPM(BaseModel):
             if opt['train']["use_prerain_MTA"]:
                 checkpoint_path = opt['train']['MTA']  
                 checkpoint = torch.load(checkpoint_path)
-                self.netG.MTA.load_state_dict(checkpoint['model_state_dict'])
+                if isinstance(self.netG, (nn.DataParallel, nn.parallel.DistributedDataParallel)):
+                    self.netG.module.MTA.load_state_dict(checkpoint['model_state_dict'])
+                else:
+                    self.netG.MTA.load_state_dict(checkpoint['model_state_dict'])
                 print('Load MTA pretrained model successfully!')
         else:
             self.load_network()
@@ -78,12 +85,12 @@ class DDPM(BaseModel):
     def test(self, continous=False):
         self.netG.eval()
         with torch.no_grad():
-            if isinstance(self.netG, nn.DataParallel):
+            if isinstance(self.netG, (nn.DataParallel, nn.parallel.DistributedDataParallel)):
                 self.SR = self.netG.module.super_resolution(
-                    self.netG.MTA(self.data['LR1'], self.data['LR2'], self.data['LR3']), continous)
+                    self.netG.module.MTA(self.data['LR1'], self.data['LR2'], self.data['LR3']), continous)
             else:
                 self.SR = self.netG.super_resolution(
-                   self.netG.MTA(self.data['LR1'], self.data['LR2'], self.data['LR3']), continous)
+                    self.netG.MTA(self.data['LR1'], self.data['LR2'], self.data['LR3']), continous)
         mse_loss = nn.MSELoss()
         loss = mse_loss(self.SR, self.data['HR'])
         
@@ -102,14 +109,14 @@ class DDPM(BaseModel):
     def sample(self, batch_size=1, continous=False):
         self.netG.eval()
         with torch.no_grad():
-            if isinstance(self.netG, nn.DataParallel):
+            if isinstance(self.netG, (nn.DataParallel, nn.parallel.DistributedDataParallel)):
                 self.SR = self.netG.module.sample(batch_size, continous)
             else:
                 self.SR = self.netG.sample(batch_size, continous)
         self.netG.train()
 
     def set_loss(self):
-        if isinstance(self.netG, nn.DataParallel):
+        if isinstance(self.netG, (nn.DataParallel, nn.parallel.DistributedDataParallel)):
             self.netG.module.set_loss(self.device)
         else:
             self.netG.set_loss(self.device)
@@ -117,7 +124,7 @@ class DDPM(BaseModel):
     def set_new_noise_schedule(self, schedule_opt, schedule_phase='train'):
         if self.schedule_phase is None or self.schedule_phase != schedule_phase:
             self.schedule_phase = schedule_phase
-            if isinstance(self.netG, nn.DataParallel):
+            if isinstance(self.netG, (nn.DataParallel, nn.parallel.DistributedDataParallel)):
                 self.netG.module.set_new_noise_schedule(
                     schedule_opt, self.device)
             else:
@@ -146,7 +153,7 @@ class DDPM(BaseModel):
 
     def print_network(self):
         s, n = self.get_network_description(self.netG)
-        if isinstance(self.netG, nn.DataParallel):
+        if isinstance(self.netG, (nn.DataParallel, nn.parallel.DistributedDataParallel)):
             net_struc_str = '{} - {}'.format(self.netG.__class__.__name__,
                                              self.netG.module.__class__.__name__)
         else:
@@ -163,7 +170,7 @@ class DDPM(BaseModel):
             self.opt['path']['checkpoint'], 'I{}_E{}_opt.pth'.format(iter_step, epoch))
         # gen
         network = self.netG
-        if isinstance(self.netG, nn.DataParallel):
+        if isinstance(self.netG, (nn.DataParallel, nn.parallel.DistributedDataParallel)):
             network = network.module
         state_dict = network.state_dict()
         for key, param in state_dict.items():
@@ -184,7 +191,7 @@ class DDPM(BaseModel):
             self.opt['path']['checkpoint'], 'I{}_E{}_opt_best_loss.pth'.format(iter_step, epoch))
         # gen
         network = self.netG
-        if isinstance(self.netG, nn.DataParallel):
+        if isinstance(self.netG, (nn.DataParallel, nn.parallel.DistributedDataParallel)):
             network = network.module
         state_dict = network.state_dict()
         for key, param in state_dict.items():
@@ -205,7 +212,7 @@ class DDPM(BaseModel):
             self.opt['path']['checkpoint'], 'I{}_E{}_opt_best_psnr.pth'.format(iter_step, epoch))
         # gen
         network = self.netG
-        if isinstance(self.netG, nn.DataParallel):
+        if isinstance(self.netG, (nn.DataParallel, nn.parallel.DistributedDataParallel)):
             network = network.module
         state_dict = network.state_dict()
         for key, param in state_dict.items():
@@ -226,7 +233,7 @@ class DDPM(BaseModel):
             self.opt['path']['checkpoint'], 'I{}_E{}_opt_best.pth'.format(iter_step, epoch))
         # gen
         network = self.netG
-        if isinstance(self.netG, nn.DataParallel):
+        if isinstance(self.netG, (nn.DataParallel, nn.parallel.DistributedDataParallel)):
             network = network.module
         state_dict = network.state_dict()
         for key, param in state_dict.items():

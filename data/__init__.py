@@ -4,15 +4,16 @@ from re import split
 import torch.utils.data
 
 
-def create_dataloader(dataset, dataset_opt, phase):
+def create_dataloader(dataset, dataset_opt, phase, sampler=None):
     """create dataloader """
     if phase == 'train':
         return torch.utils.data.DataLoader(
             dataset,
             batch_size=dataset_opt['batch_size'],
-            shuffle=dataset_opt['use_shuffle'],
+            shuffle=(dataset_opt['use_shuffle'] and sampler is None),
             num_workers=dataset_opt['num_workers'],
-            pin_memory=True)
+            pin_memory=True,
+            sampler=sampler)
     elif phase == 'val':
         return torch.utils.data.DataLoader(
             dataset, batch_size=1, shuffle=False, num_workers=0, pin_memory=True)

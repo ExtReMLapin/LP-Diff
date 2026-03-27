@@ -118,19 +118,31 @@ The **MDLP Dataset** consists of 11,006 groups of real-world degraded license pl
 
 ### 3. Training & Evaluation
 
-- **Training:**
-    
+- **Training (single GPU):**
+
     ```bash
-    python run.py -p train -c ./config/LP-Diff.json
+    python run.py -p train -c ./config/LP-Diff.json -gpu 0
     ```
-    
+
+- **Training (multi-GPU with DDP):**
+
+    ```bash
+    torchrun --nproc_per_node=<NUM_GPUS> run.py -p train -c ./config/LP-Diff.json -gpu 0,1,...
+    ```
+
+    Example with 2 GPUs:
+
+    ```bash
+    torchrun --nproc_per_node=2 run.py -p train -c ./config/LP-Diff.json -gpu 0,1
+    ```
+
 - **Validation:**
-    
+
     ```bash
-    python run.py -p val -c ./config/LP-Diff.json
+    python run.py -p val -c ./config/LP-Diff.json -gpu 0
     ```
-    
-- Results and checkpoints are saved in `./experiments`.
+
+- Results and checkpoints are saved in `./experiments`. When using multi-GPU training, logging and checkpointing are performed exclusively by rank 0.
     
 
 ---
