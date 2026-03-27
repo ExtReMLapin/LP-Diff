@@ -579,7 +579,7 @@ class MTA(nn.Module):
         B, N, C, H, W = lr_seq.shape
 
         # Encode all frames in one batched pass through the shared encoder
-        feats_flat = self.encoder(lr_seq.view(B * N, C, H, W))
+        feats_flat = self.encoder(lr_seq.reshape(B * N, C, H, W))
         _, C_out, H_out, W_out = feats_flat.shape
         feats = feats_flat.view(B, N, C_out, H_out, W_out)
 
