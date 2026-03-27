@@ -147,6 +147,34 @@ The **MDLP Dataset** consists of 11,006 groups of real-world degraded license pl
 
 ---
 
+## 🖼️ Experiment Viewer
+
+A local web viewer to explore training results across epochs is available in `viewer/`.
+
+**Features:**
+- Select any experiment run from the dropdown (only runs with results are shown)
+- Epoch slider to browse super-resolution quality over training iterations
+- Prefetch of adjacent epochs for smooth navigation
+- Click any plate to compare HR / LR1 / LR2 / LR3 / SR side by side
+
+**Setup (one-time):**
+
+```bash
+cd viewer
+pip install -r requirements.txt
+```
+
+**Launch:**
+
+```bash
+cd viewer
+uvicorn backend:app --port 8765
+```
+
+Then open `http://localhost:8765` in your browser.
+
+---
+
 ## 📂 Project Structure
 
 ```
@@ -157,6 +185,7 @@ LP-Diff/
 ├── experiments/         # Model checkpoints and logs
 ├── figs/                # Visualization images for README and paper
 ├── models/              # Model implementations
+├── viewer/              # Local web viewer for experiment results
 ├── requirements.txt     # Python dependencies
 └── run.py               # Main training/testing script
 ```
