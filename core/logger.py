@@ -69,9 +69,9 @@ def parse(args):
         opt['datasets']['train']['data_len'] = 6
         opt['datasets']['val']['data_len'] = 3
 
-    # validation in train phase
+    # validation in train phase: default to 3 images if not set in config
     if phase == 'train':
-        opt['datasets']['val']['data_len'] = 3
+        opt['datasets']['val'].setdefault('data_len', 3)
 
     # W&B Logging
     try:

@@ -172,43 +172,44 @@ if __name__ == "__main__":
                 diffusion.set_new_noise_schedule(
                     opt['model']['beta_schedule']['val'], schedule_phase='val')
                 for _,  val_data in enumerate(val_loader):
-                    idx += 1
                     diffusion.feed_data(val_data)
                     loss = diffusion.test(continous=False)
                     visuals = diffusion.get_current_visuals()
-                    sr_img = Metrics.tensor2img(visuals['SR'])  # uint8
-                    hr_img = Metrics.tensor2img(visuals['HR'])  # uint8
-                    lr1_img = Metrics.tensor2img(visuals['LR1'])  # uint8
-                    lr2_img = Metrics.tensor2img(visuals['LR2'])  # uint8
-                    lr3_img = Metrics.tensor2img(visuals['LR3'])  # uint8
+                    bs = visuals['HR'].shape[0]
+                    avg_val_loss += loss * bs
+                    for b in range(bs):
+                        idx += 1
+                        sr_img = Metrics.tensor2img(visuals['SR'][b])  # uint8
+                        hr_img = Metrics.tensor2img(visuals['HR'][b])  # uint8
+                        lr1_img = Metrics.tensor2img(visuals['LR1'][b])  # uint8
+                        lr2_img = Metrics.tensor2img(visuals['LR2'][b])  # uint8
+                        lr3_img = Metrics.tensor2img(visuals['LR3'][b])  # uint8
 
-                    if rank == 0:
-                        # generation
-                        Metrics.save_img(
-                            hr_img, '{}/{}_{}_hr.png'.format(result_path, current_step, idx))
-                        Metrics.save_img(
-                            sr_img, '{}/{}_{}_sr.png'.format(result_path, current_step, idx))
-                        Metrics.save_img(
-                            lr1_img, '{}/{}_{}_lr1.png'.format(result_path, current_step, idx))
-                        Metrics.save_img(
-                            lr2_img, '{}/{}_{}_lr2.png'.format(result_path, current_step, idx))
-                        Metrics.save_img(
-                            lr3_img, '{}/{}_{}_lr3.png'.format(result_path, current_step, idx))
-                        if tb_logger is not None:
-                            tb_logger.add_image(
-                                'Epoch_{}'.format(current_epoch),
-                                np.transpose(np.concatenate(
-                                    (lr1_img, lr2_img, lr3_img, sr_img, hr_img), axis=1), [2, 0, 1]),
-                                idx)
-                    avg_psnr += Metrics.calculate_psnr(
-                        sr_img, hr_img)
-                    avg_val_loss += loss
+                        if rank == 0:
+                            # generation
+                            Metrics.save_img(
+                                hr_img, '{}/{}_{}_hr.png'.format(result_path, current_step, idx))
+                            Metrics.save_img(
+                                sr_img, '{}/{}_{}_sr.png'.format(result_path, current_step, idx))
+                            Metrics.save_img(
+                                lr1_img, '{}/{}_{}_lr1.png'.format(result_path, current_step, idx))
+                            Metrics.save_img(
+                                lr2_img, '{}/{}_{}_lr2.png'.format(result_path, current_step, idx))
+                            Metrics.save_img(
+                                lr3_img, '{}/{}_{}_lr3.png'.format(result_path, current_step, idx))
+                            if tb_logger is not None:
+                                tb_logger.add_image(
+                                    'Epoch_{}'.format(current_epoch),
+                                    np.transpose(np.concatenate(
+                                        (lr1_img, lr2_img, lr3_img, sr_img, hr_img), axis=1), [2, 0, 1]),
+                                    idx)
+                        avg_psnr += Metrics.calculate_psnr(sr_img, hr_img)
 
-                    if wandb_logger:
-                        wandb_logger.log_image(
-                            f'validation_{idx}',
-                            np.concatenate((lr1_img, lr2_img, lr3_img, sr_img, hr_img), axis=1)
-                        )
+                        if wandb_logger:
+                            wandb_logger.log_image(
+                                f'validation_{idx}',
+                                np.concatenate((lr1_img, lr2_img, lr3_img, sr_img, hr_img), axis=1)
+                            )
 
                 # Aggregate metrics across all GPUs
                 if world_size > 1:

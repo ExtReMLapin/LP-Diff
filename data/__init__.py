@@ -17,8 +17,9 @@ def create_dataloader(dataset, dataset_opt, phase, sampler=None):
             prefetch_factor=(2 if dataset_opt['num_workers'] > 0 else None),
             sampler=sampler)
     elif phase == 'val':
+        batch_size = dataset_opt.get('val_batch_size', 1)
         return torch.utils.data.DataLoader(
-            dataset, batch_size=1, shuffle=False, num_workers=0,
+            dataset, batch_size=batch_size, shuffle=False, num_workers=0,
             pin_memory=True, sampler=sampler)
     else:
         raise NotImplementedError(

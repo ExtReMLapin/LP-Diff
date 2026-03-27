@@ -16,10 +16,10 @@
         "train": {
             "name": "MDLP",
             "mode": "LRHR", 
-            "dataroot": "D:/torrent/LP-Diff/dataset/",
+            "dataroot": "/home/pierre/dataset_plaques/",
             "width": 224,
             "height": 112,
-            "batch_size": 5,
+            "batch_size": 45,
             "num_workers": 8,
             "use_shuffle": true
         },
@@ -28,7 +28,9 @@
             "mode": "LRHR",
             "width": 224,
             "height": 112,
-            "dataroot": "D:/torrent/LP-Diff/dataset/"
+            "dataroot": "/home/pierre/dataset_plaques/",
+            "val_batch_size": 50,
+            "data_len": 50
         }
     },
     "model": {

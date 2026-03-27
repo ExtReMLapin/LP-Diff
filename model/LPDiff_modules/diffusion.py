@@ -223,14 +223,12 @@ class GaussianDiffusion(nn.Module):
             for i in tqdm(reversed(range(0, self.num_timesteps)), desc='sampling loop time step',
                           total=self.num_timesteps):
                 img = self.p_sample(img, i, condition_x=x)
-                if i % sample_inter == 0:
+                if continous and i % sample_inter == 0:
                     ret_img = torch.cat([ret_img, img], dim=0)
         if continous:
             return ret_img + x_in
-            # return ret_img
         else:
-            return ret_img[-1] + x_in
-            # return ret_img[-1]
+            return img + x_in
 
     @torch.no_grad()
     def sample(self, batch_size=1, continous=False):
