@@ -416,41 +416,25 @@ class TECrossAtt(nn.Module):
 
 class CrossAttentionLayer(nn.Module):
     """
-    Standard transformer cross-attention layer with pre/post LayerNorm and feedforward block.
+    Transformer cross-attention layer with post-LayerNorm and feedforward block.
     """
     def __init__(self, d_model=64, num_heads=4, dim_feedforward=128):
         super(CrossAttentionLayer, self).__init__()
         self.d_model = d_model
-        self.num_heads = num_heads
-        self.d_k = d_model // num_heads
-        self.q_linear = nn.Linear(d_model, d_model)
-        self.k_linear = nn.Linear(d_model, d_model)
-        self.v_linear = nn.Linear(d_model, d_model)
-        self.out_linear = nn.Linear(d_model, d_model)
+        self.attn = nn.MultiheadAttention(d_model, num_heads, dropout=0.1, batch_first=True)
         self.norm1 = nn.LayerNorm(d_model)
         self.norm2 = nn.LayerNorm(d_model)
         self.fc1 = nn.Linear(d_model, dim_feedforward)
         self.fc2 = nn.Linear(dim_feedforward, d_model)
-        self.dropout = nn.Dropout(0.1)
 
     def forward(self, f1, f2, mask=None):
         batch_size = f1.size(0)
         _, _, height, width = f1.size()
+        # Flatten spatial dims: (B, C, H, W) -> (B, H*W, C)
         f1 = f1.view(batch_size, self.d_model, -1).transpose(1, 2)
         f2 = f2.view(batch_size, self.d_model, -1).transpose(1, 2)
-        q = self.q_linear(f2)
-        k = self.k_linear(f1)
-        v = self.v_linear(f1)
-        q = q.view(batch_size, -1, self.num_heads, self.d_k).transpose(1, 2)
-        k = k.view(batch_size, -1, self.num_heads, self.d_k).transpose(1, 2)
-        v = v.view(batch_size, -1, self.num_heads, self.d_k).transpose(1, 2)
-        scores = torch.matmul(q, k.transpose(-2, -1)) / torch.sqrt(torch.tensor(self.d_k, dtype=torch.float32))
-        if mask is not None:
-            scores = scores.masked_fill(mask == 0, -1e9)
-        attn = F.softmax(scores, dim=-1)
-        output = torch.matmul(attn, v)
-        output = output.transpose(1, 2).contiguous().view(batch_size, -1, self.d_model)
-        output = self.out_linear(output)
+        # f2 is query, f1 is key/value (cross-attention: f2 attends into f1)
+        output, _ = self.attn(query=f2, key=f1, value=f1, key_padding_mask=mask)
         output = self.norm1(output + f2)
         ff_output = self.fc2(F.relu(self.fc1(output)))
         output = self.norm2(ff_output + output)
