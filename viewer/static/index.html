@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LP-Diff Viewer</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+
+  <header>
+    <h1>LP-Diff Viewer</h1>
+    <div class="controls">
+      <label for="exp-select">Experiment</label>
+      <select id="exp-select">
+        <option value="">-- Sélectionner --</option>
+      </select>
+    </div>
+  </header>
+
+  <div id="epoch-bar" class="epoch-bar hidden">
+    <span id="epoch-label">Epoch —</span>
+    <input type="range" id="epoch-slider" min="0" max="0" value="0" />
+    <span id="iter-label"></span>
+  </div>
+
+  <div id="loading" class="loading hidden">Chargement…</div>
+
+  <div id="grid" class="grid"></div>
+
+  <!-- Modal -->
+  <div id="modal" class="modal hidden">
+    <div class="modal-backdrop" id="modal-backdrop"></div>
+    <div class="modal-content">
+      <button class="modal-close" id="modal-close">✕</button>
+      <div class="modal-title" id="modal-title"></div>
+      <div class="modal-images" id="modal-images"></div>
+    </div>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
