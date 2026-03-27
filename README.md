@@ -151,6 +151,9 @@ The **MDLP Dataset** consists of 11,006 groups of real-world degraded license pl
 
 A local web viewer to explore training results across epochs is available in `viewer/`.
 
+<img width="3839" height="1330" alt="image" src="https://github.com/user-attachments/assets/b7fb07b0-3841-4a46-a441-d633fabb4566" />
+
+
 **Features:**
 - Select any experiment run from the dropdown (only runs with results are shown)
 - Epoch slider to browse super-resolution quality over training iterations
