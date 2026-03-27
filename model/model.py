@@ -20,7 +20,7 @@ class DDPM(BaseModel):
         if opt['distributed']:
             assert torch.cuda.is_available()
             self.netG = nn.parallel.DistributedDataParallel(
-                self.netG, device_ids=[self.local_rank])
+                self.netG, device_ids=[self.local_rank], find_unused_parameters=True)
 
         # set loss and load resume state
         self.set_loss()
