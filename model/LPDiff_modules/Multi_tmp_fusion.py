@@ -588,15 +588,32 @@ class MTA(nn.Module):
         self.crossatt = CrossAttentionLayer(d_model=64, num_heads=8, dim_feedforward=256)
         self.kaiming_init(self.crossatt)
         
-    def forward(self, f1, f2, f3):
-        f1_multi_scale = self.encoder(f1)
-        f2_multi_scale = self.encoder(f2)
-        f3_multi_scale = self.encoder(f3)
-        crossatt_1 = self.crossatt(f1_multi_scale, f2_multi_scale) + f2_multi_scale
-        crossatt_2 = self.crossatt(f2_multi_scale, f3_multi_scale) + f3_multi_scale
-        GCA1 = self.GCA(crossatt_1)
-        GCA2 = self.GCA(crossatt_2)
-        channel_output = self.IntraframeAtt(GCA1, GCA2)
+    def forward(self, lr_seq):
+        # lr_seq: (B, N, C, H, W)  — N can be any value >= 1
+        B, N, C, H, W = lr_seq.shape
+
+        # Encode all frames in one batched pass through the shared encoder
+        feats_flat = self.encoder(lr_seq.view(B * N, C, H, W))
+        _, C_out, H_out, W_out = feats_flat.shape
+        feats = feats_flat.view(B, N, C_out, H_out, W_out)
+
+        accumulated_feat = feats[:, 0]
+
+        if N == 1:
+            # Single frame: only gradient/curvature attention, no cross-frame fusion
+            channel_output = self.GCA(accumulated_feat)
+        else:
+            # Iteratively fuse each subsequent frame into the accumulated representation
+            gca_base = self.GCA(accumulated_feat)
+            for i in range(1, N):
+                current_feat = feats[:, i]
+                # Cross-attention: query=accumulated, key/value=current
+                crossatt = self.crossatt(accumulated_feat, current_feat) + current_feat
+                gca_cross = self.GCA(crossatt)
+                gca_base = self.IntraframeAtt(gca_base, gca_cross)
+                accumulated_feat = crossatt
+            channel_output = gca_base
+
         return self.decoder(channel_output)
     
     def kaiming_init(self, model):
@@ -612,11 +629,8 @@ class MTA(nn.Module):
 if __name__ == '__main__':
     model = MTA(in_channel=3, out_channel=3)
     model = model.cuda()
-    t1 = torch.randn(5, 3, 128, 224)
-    t2 = torch.randn(5, 3, 128, 224)
-    t3 = torch.randn(5, 3, 128, 224)
-    t1 = t1.cuda()
-    t2 = t2.cuda()
-    t3 = t3.cuda()
-    output = model(t1, t2, t3)
-    print(output.shape)
+    for n_frames in [1, 3, 5]:
+        lr_seq = torch.randn(5, n_frames, 3, 128, 224).cuda()
+        output = model(lr_seq)
+        print(f'N={n_frames}: input {lr_seq.shape} -> output {output.shape}')
+        assert output.shape == (5, 3, 128, 224)

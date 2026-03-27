@@ -70,9 +70,7 @@ if __name__ == "__main__":
         visuals = diffusion.get_current_visuals()
 
         hr_img = Metrics.tensor2img(visuals['HR'])  # uint8
-        lr1_img = Metrics.tensor2img(visuals['LR1'])  # uint8
-        lr2_img = Metrics.tensor2img(visuals['LR2'])  # uint8
-        lr3_img = Metrics.tensor2img(visuals['LR3'])  # uint8
+        lr_img = Metrics.tensor2img(visuals['LR'])   # first LR frame, uint8
 
         sr_img_mode = 'grid'
         if sr_img_mode == 'single':
@@ -93,11 +91,7 @@ if __name__ == "__main__":
         Metrics.save_img(
                 hr_img, '{}/{}_{}_hr.png'.format(result_path, current_step, idx))
         Metrics.save_img(
-                lr1_img, '{}/{}_{}_lr1.png'.format(result_path, current_step, idx))
-        Metrics.save_img(
-                lr2_img, '{}/{}_{}_lr2.png'.format(result_path, current_step, idx))
-        Metrics.save_img(
-                lr2_img, '{}/{}_{}_lr3.png'.format(result_path, current_step, idx))
+                lr_img, '{}/{}_{}_lr.png'.format(result_path, current_step, idx))
 
         # if wandb_logger and opt['log_infer']:
         #     wandb_logger.log_eval_data(fake_img, Metrics.tensor2img(visuals['SR'][-1]), hr_img)

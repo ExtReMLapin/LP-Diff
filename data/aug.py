@@ -67,3 +67,21 @@ def get_normalize():
         return r['image']
 
     return process
+
+
+def get_extra_augments():
+    """
+    Prepared extra augmentations for more realistic training data (inter-frame
+    misalignment, exposure variation). NOT active by default — wire in by calling
+    this in the dataset and applying it per LR frame before normalization.
+    """
+    pipeline = albu.Compose([
+        albu.ShiftScaleRotate(shift_limit=0.03, scale_limit=0.0, rotate_limit=5,
+                              border_mode=0, p=0.5),
+        albu.ColorJitter(brightness=0.1, contrast=0.1, saturation=0.1, hue=0.03, p=0.5),
+    ])
+
+    def process(a):
+        return pipeline(image=a)['image']
+
+    return process

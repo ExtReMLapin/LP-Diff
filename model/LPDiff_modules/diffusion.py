@@ -251,7 +251,7 @@ class GaussianDiffusion(nn.Module):
 
     # x_in['SR'] is the predicted image of CNN
     def p_losses(self, x_in, noise=None):
-        condition = self.MTA(x_in['LR1'], x_in['LR2'], x_in['LR3'])
+        condition = self.MTA(x_in['LR_seq'])
         x_start = x_in['HR'] - condition
         
         # cnn_prediction = x_in['SR']

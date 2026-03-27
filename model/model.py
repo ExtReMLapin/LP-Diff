@@ -75,6 +75,12 @@ class DDPM(BaseModel):
 
     def feed_data(self, data):
         self.data = self.set_device(data)
+        if self.opt['phase'] == 'train':
+            # Randomly truncate LR_seq to 1..MAX_FRAMES unique frames each step.
+            # This forces the model to work well with any number of input frames.
+            max_n = self.data['LR_seq'].shape[1]
+            random_n = torch.randint(1, max_n + 1, (1,)).item()
+            self.data['LR_seq'] = self.data['LR_seq'][:, :random_n, :, :, :]
 
     def optimize_parameters(self):
         self.optG.zero_grad()
@@ -102,10 +108,10 @@ class DDPM(BaseModel):
         with torch.no_grad():
             if isinstance(self.netG, (nn.DataParallel, nn.parallel.DistributedDataParallel)):
                 self.SR = self.netG.module.super_resolution(
-                    self.netG.module.MTA(self.data['LR1'], self.data['LR2'], self.data['LR3']), continous)
+                    self.netG.module.MTA(self.data['LR_seq']), continous)
             else:
                 self.SR = self.netG.super_resolution(
-                    self.netG.MTA(self.data['LR1'], self.data['LR2'], self.data['LR3']), continous)
+                    self.netG.MTA(self.data['LR_seq']), continous)
         mse_loss = nn.MSELoss()
         loss = mse_loss(self.SR, self.data['HR'])
         
@@ -154,16 +160,9 @@ class DDPM(BaseModel):
             out_dict['SAM'] = self.SR.detach().float().cpu()
         else:
             out_dict['SR'] = self.SR.detach().float().cpu()
-            # out_dict['INF'] = self.data['SR'].detach().float().cpu()
             out_dict['HR'] = self.data['HR'].detach().float().cpu()
-            out_dict['LR1'] = self.data['LR1'].detach().float().cpu()
-            out_dict['LR2'] = self.data['LR2'].detach().float().cpu()
-            out_dict['LR3'] = self.data['LR3'].detach().float().cpu()
-            # out_dict['middle'] = self.netG.MTA(self.data['LR1'], self.data['LR2'], self.data['LR3']).detach().float().cpu()
-            # if need_LR and 'LR' in self.data:
-            #     out_dict['LR'] = self.data['LR'].detach().float().cpu()
-            # else:
-            #     out_dict['LR'] = self.data['LR'].detach().float().cpu()
+            # Expose first LR frame for logging/visualisation
+            out_dict['LR'] = self.data['LR_seq'][:, 0].detach().float().cpu()
         return out_dict
 
     def print_network(self):

@@ -181,9 +181,7 @@ if __name__ == "__main__":
                         idx += 1
                         sr_img = Metrics.tensor2img(visuals['SR'][b])  # uint8
                         hr_img = Metrics.tensor2img(visuals['HR'][b])  # uint8
-                        lr1_img = Metrics.tensor2img(visuals['LR1'][b])  # uint8
-                        lr2_img = Metrics.tensor2img(visuals['LR2'][b])  # uint8
-                        lr3_img = Metrics.tensor2img(visuals['LR3'][b])  # uint8
+                        lr_img = Metrics.tensor2img(visuals['LR'][b])  # first LR frame, uint8
 
                         if rank == 0:
                             # generation
@@ -192,23 +190,19 @@ if __name__ == "__main__":
                             Metrics.save_img(
                                 sr_img, '{}/{}_{}_sr.png'.format(result_path, current_step, idx))
                             Metrics.save_img(
-                                lr1_img, '{}/{}_{}_lr1.png'.format(result_path, current_step, idx))
-                            Metrics.save_img(
-                                lr2_img, '{}/{}_{}_lr2.png'.format(result_path, current_step, idx))
-                            Metrics.save_img(
-                                lr3_img, '{}/{}_{}_lr3.png'.format(result_path, current_step, idx))
+                                lr_img, '{}/{}_{}_lr.png'.format(result_path, current_step, idx))
                             if tb_logger is not None:
                                 tb_logger.add_image(
                                     'Epoch_{}'.format(current_epoch),
                                     np.transpose(np.concatenate(
-                                        (lr1_img, lr2_img, lr3_img, sr_img, hr_img), axis=1), [2, 0, 1]),
+                                        (lr_img, sr_img, hr_img), axis=1), [2, 0, 1]),
                                     idx)
                         avg_psnr += Metrics.calculate_psnr(sr_img, hr_img)
 
                         if wandb_logger:
                             wandb_logger.log_image(
                                 f'validation_{idx}',
-                                np.concatenate((lr1_img, lr2_img, lr3_img, sr_img, hr_img), axis=1)
+                                np.concatenate((lr_img, sr_img, hr_img), axis=1)
                             )
 
                 # Aggregate metrics across all GPUs
@@ -277,9 +271,7 @@ if __name__ == "__main__":
             visuals = diffusion.get_current_visuals()
 
             hr_img = Metrics.tensor2img(visuals['HR'])  # uint8
-            lr1_img = Metrics.tensor2img(visuals['LR1'])  # uint8
-            lr2_img = Metrics.tensor2img(visuals['LR2'])  # uint8
-            lr3_img = Metrics.tensor2img(visuals['LR3'])  # uint8
+            lr_img = Metrics.tensor2img(visuals['LR'])   # first LR frame, uint8
 
             filename = os.path.basename(os.path.split(diffusion.data['path'][0])[0])
 
@@ -305,11 +297,7 @@ if __name__ == "__main__":
                 Metrics.save_img(
                     hr_img, '{}/{}_hr.png'.format(result_path, filename))
                 Metrics.save_img(
-                    lr1_img, '{}/{}_lr1.png'.format(result_path, filename))
-                Metrics.save_img(
-                    lr2_img, '{}/{}_lr2.png'.format(result_path, filename))
-                Metrics.save_img(
-                    lr3_img, '{}/{}_lr3.png'.format(result_path, filename))
+                    lr_img, '{}/{}_lr.png'.format(result_path, filename))
 
             # generation
             eval_psnr = Metrics.calculate_psnr(Metrics.tensor2img(visuals['SR'][-1]), hr_img)
@@ -319,7 +307,7 @@ if __name__ == "__main__":
             avg_ssim += eval_ssim
 
             if wandb_logger and opt['log_eval']:
-                wandb_logger.log_eval_data(lr2_img, Metrics.tensor2img(visuals['SR'][-1]), hr_img, eval_psnr, eval_ssim)
+                wandb_logger.log_eval_data(lr_img, Metrics.tensor2img(visuals['SR'][-1]), hr_img, eval_psnr, eval_ssim)
 
         avg_psnr = avg_psnr / idx
         avg_ssim = avg_ssim / idx

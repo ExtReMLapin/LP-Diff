@@ -10,6 +10,8 @@ import numpy as np
 from PIL import Image
 import re
 
+MAX_FRAMES = 5  # Maximum number of LR frames loaded per sample (padded to this count)
+
 class LRHRDataset(Dataset):
     def __init__(self, opt, phase):
         super(LRHRDataset, self).__init__()
@@ -37,10 +39,7 @@ class LRHRDataset(Dataset):
             self.lr = self.lr[:data_len]
             self.hr = self.hr[:data_len]
 
-        # if self.opt.mode == 'train':
-        self.transform_fn1 = aug.get_transforms(size=(height, width))
-        self.transform_fn2 = aug.get_transforms(size=(height, width))
-        self.transform_fn3 = aug.get_transforms(size=(height, width))
+        self.lr_transform_fn = aug.get_transforms(size=(height, width))
         self.transform_fn = aug.get_transforms(size=(height, width))
 
         self.normalize_fn = aug.get_normalize()
@@ -59,42 +58,32 @@ class LRHRDataset(Dataset):
         return len(self.lr)
 
     def __getitem__(self, idx):
-        # print(self.lr[idx][0], self.lr[idx][1], self.lr[idx][2], self.hr[idx])
-        assert len(self.lr[idx]) != 0, f'Not enough LR images for index {idx}: {self.lr[idx]} found, expected at least 1.'
-        n = len(self.lr[idx])
-        if n == 1:
-            sample_id1, sample_id2, sample_id3 = 0, 0, 0
-        elif n == 2:
-            sample_id1, sample_id2, sample_id3 = 0, 1, 1
-        else:
-            sample_id1, sample_id2, sample_id3 = sorted(random.sample(range(n), 3))
-        lr_image_1 = Image.open(self.lr[idx][sample_id1])
-        lr_image_2 = Image.open(self.lr[idx][sample_id2])
-        lr_image_3 = Image.open(self.lr[idx][sample_id3])        
-        hr_image = Image.open(self.hr[idx])
-        lr_image_1 = np.array(lr_image_1)
-        lr_image_2 = np.array(lr_image_2)
-        lr_image_3 = np.array(lr_image_3)
-        hr_image = np.array(hr_image)
+        assert len(self.lr[idx]) != 0, f'No LR images for index {idx}.'
+        n_available = len(self.lr[idx])
+        n_to_sample = min(n_available, MAX_FRAMES)
+        sampled_paths = sorted(random.sample(self.lr[idx], n_to_sample))
 
-        lr_image_1 = self.transform_fn1(lr_image_1)
-        lr_image_2 = self.transform_fn2(lr_image_2)
-        lr_image_3 = self.transform_fn3(lr_image_3)
+        # Pad to MAX_FRAMES by repeating the last frame so batches have uniform shape.
+        # The actual number of unique frames used at training time is chosen randomly
+        # in feed_data (1 to MAX_FRAMES), so the padded frames are discarded.
+        while len(sampled_paths) < MAX_FRAMES:
+            sampled_paths.append(sampled_paths[-1])
+
+        lr_tensors = []
+        for path in sampled_paths:
+            img = np.array(Image.open(path))
+            img = self.lr_transform_fn(img)
+            img = self.normalize_fn(img)
+            img = transforms.ToTensor()(img)
+            lr_tensors.append(img)
+
+        hr_image = np.array(Image.open(self.hr[idx]))
         hr_image = self.transform_fn(hr_image)
-        
-        lr_image_1 = self.normalize_fn(lr_image_1)
-        lr_image_2 = self.normalize_fn(lr_image_2)
-        lr_image_3 = self.normalize_fn(lr_image_3)
         hr_image = self.normalize_fn(hr_image)
-
-        lr_image_1 = transforms.ToTensor()(lr_image_1)
-        lr_image_2 = transforms.ToTensor()(lr_image_2)
-        lr_image_3 = transforms.ToTensor()(lr_image_3)
         hr_image = transforms.ToTensor()(hr_image)
 
-        # return {'LR1': lr_image_1, 'LR2': lr_image_2, 'LR3': lr_image_3, 'HR': hr_image, 
-        #         'LR1_path': self.lr[idx][0], 'LR2_path': self.lr[idx][1], 'LR3_path': self.lr[idx][2], 'HR_path': self.hr[idx]}
-        return {'LR1': lr_image_1, 'LR2': lr_image_2, 'LR3': lr_image_3, 'HR': hr_image, 'path': self.hr[idx]} 
+        lr_seq = torch.stack(lr_tensors, dim=0)  # (MAX_FRAMES, 3, H, W)
+        return {'LR_seq': lr_seq, 'HR': hr_image, 'path': self.hr[idx]}
 
     def load_data(self):
         dataloader = torch.utils.data.DataLoader(
@@ -118,6 +107,6 @@ if __name__ == '__main__':
     opt = args
     dataset = LRHRDataset(opt)
     data = dataset[0]
-    print(data['LR1'].shape)
+    print(data['LR_seq'].shape)  # expected: (MAX_FRAMES, 3, H, W)
 
 
