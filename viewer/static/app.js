@@ -10,6 +10,22 @@ const state = {
 
 const $ = id => document.getElementById(id);
 
+// ── Tab switching ─────────────────────────────────────────────────────────────
+
+document.querySelectorAll('.tab').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const tab = btn.dataset.tab;
+    document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+
+    $('view-results').classList.toggle('hidden', tab !== 'results');
+    $('results-controls').classList.toggle('hidden', tab !== 'results');
+    $('view-infer').classList.toggle('hidden', tab !== 'infer');
+
+    if (tab === 'infer') loadInferExperiments();
+  });
+});
+
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function imgUrl(exp, epoch, filename) {
@@ -124,7 +140,6 @@ function updateGrid(epochIndex) {
 function updateEpochLabel() {
   const { epoch, plates } = getEpochData(state.epochIndex);
   $('epoch-label').textContent = `Epoch ${epoch}`;
-  // find a sample iters value
   const firstPlate = Object.values(plates)[0];
   $('iter-label').textContent = firstPlate ? `iter ${firstPlate.iters}` : '';
 }
@@ -373,8 +388,227 @@ $('metrics-toggle').addEventListener('click', () => {
   $('metrics-chevron').textContent = state.metricsOpen ? '▼' : '▶';
 });
 
-// ── Init ──────────────────────────────────────────────────────────────────────
+// ── Init (results tab) ────────────────────────────────────────────────────────
 
 $('exp-select').addEventListener('change', e => selectExperiment(e.target.value));
 
 loadExperiments();
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// INFERENCE TAB
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const inferState = {
+  files: [],   // File objects chosen by user (up to 3)
+  running: false,
+};
+
+// ── Experiment list ───────────────────────────────────────────────────────────
+
+async function loadInferExperiments() {
+  const sel = $('infer-exp-select');
+  const current = sel.value;
+  // Don't reload if already populated
+  if (sel.options.length > 1) return;
+
+  const res = await fetch('/api/infer/experiments');
+  const { experiments } = await res.json();
+  experiments.forEach(name => {
+    const opt = document.createElement('option');
+    opt.value = opt.textContent = name;
+    sel.appendChild(opt);
+  });
+
+  if (current && [...sel.options].some(o => o.value === current)) {
+    sel.value = current;
+  }
+}
+
+$('infer-exp-select').addEventListener('change', async e => {
+  const exp = e.target.value;
+  $('infer-ckpt-label').textContent = '';
+  if (!exp) { updateRunBtn(); return; }
+
+  const res = await fetch(`/api/infer/status/${exp}`);
+  const info = await res.json();
+  const label = $('infer-ckpt-label');
+  if (info.loaded) {
+    label.textContent = 'Modèle chargé';
+    label.className = 'infer-ckpt-label loaded';
+  } else if (info.has_checkpoint) {
+    label.textContent = info.checkpoint;
+    label.className = 'infer-ckpt-label';
+  } else {
+    label.textContent = 'Aucun checkpoint trouvé';
+    label.className = 'infer-ckpt-label error';
+  }
+  updateRunBtn();
+});
+
+// ── File picking ──────────────────────────────────────────────────────────────
+
+$('browse-btn').addEventListener('click', () => $('file-input').click());
+
+$('file-input').addEventListener('change', e => {
+  handleFiles([...e.target.files]);
+  e.target.value = '';  // reset so same file can be re-added
+});
+
+const dropZone = $('drop-zone');
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('drag-over');
+  handleFiles([...e.dataTransfer.files]);
+});
+
+function handleFiles(newFiles) {
+  const imageFiles = newFiles.filter(f => f.type.startsWith('image/'));
+  const combined = [...inferState.files, ...imageFiles];
+
+  $('file-error').classList.add('hidden');
+
+  if (combined.length > 3) {
+    $('file-error').textContent = `Trop d'images : ${combined.length} sélectionnées, maximum 3.`;
+    $('file-error').classList.remove('hidden');
+    // Keep only up to 3
+    inferState.files = combined.slice(0, 3);
+  } else {
+    inferState.files = combined;
+  }
+
+  renderThumbs();
+  updateRunBtn();
+}
+
+function renderThumbs() {
+  const thumbsEl = $('thumbs');
+  thumbsEl.innerHTML = '';
+  inferState.files.forEach((file, idx) => {
+    const wrap = document.createElement('div');
+    wrap.className = 'thumb-wrap';
+
+    const img = document.createElement('img');
+    img.src = URL.createObjectURL(file);
+    img.alt = file.name;
+
+    const remove = document.createElement('button');
+    remove.className = 'thumb-remove';
+    remove.textContent = '✕';
+    remove.title = 'Supprimer';
+    remove.addEventListener('click', () => {
+      inferState.files.splice(idx, 1);
+      $('file-error').classList.add('hidden');
+      renderThumbs();
+      updateRunBtn();
+    });
+
+    const label = document.createElement('span');
+    label.className = 'thumb-label';
+    label.textContent = `LR ${idx + 1}`;
+
+    wrap.appendChild(img);
+    wrap.appendChild(remove);
+    wrap.appendChild(label);
+    thumbsEl.appendChild(wrap);
+  });
+
+  const row = $('thumb-row');
+  if (inferState.files.length > 0) {
+    row.classList.remove('hidden');
+    $('frame-count').textContent = `${inferState.files.length}/3 image${inferState.files.length > 1 ? 's' : ''}`;
+    if (inferState.files.length < 3) {
+      $('frame-count').title = 'Les images manquantes seront complétées par duplication';
+    }
+  } else {
+    row.classList.add('hidden');
+  }
+}
+
+function updateRunBtn() {
+  const exp = $('infer-exp-select').value;
+  const hasFiles = inferState.files.length > 0;
+  $('run-btn').disabled = !exp || !hasFiles || inferState.running;
+}
+
+// ── Run inference ─────────────────────────────────────────────────────────────
+
+$('run-btn').addEventListener('click', runInference);
+
+async function runInference() {
+  const exp = $('infer-exp-select').value;
+  if (!exp || inferState.files.length === 0) return;
+
+  inferState.running = true;
+  updateRunBtn();
+
+  const statusEl = $('infer-status');
+  statusEl.textContent = 'Chargement du modèle et inférence en cours…';
+  statusEl.className = 'infer-status';
+
+  $('infer-results').classList.add('hidden');
+
+  const form = new FormData();
+  inferState.files.forEach(f => form.append('files', f));
+
+  try {
+    const res = await fetch(`/api/infer/${exp}`, { method: 'POST', body: form });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: res.statusText }));
+      throw new Error(err.detail || res.statusText);
+    }
+
+    const data = await res.json();
+    showInferResults(data);
+    statusEl.textContent = 'Inférence terminée.';
+    statusEl.className = 'infer-status ok';
+
+    // Update the ckpt label to show "Modèle chargé"
+    const lbl = $('infer-ckpt-label');
+    lbl.textContent = 'Modèle chargé';
+    lbl.className = 'infer-ckpt-label loaded';
+
+  } catch (err) {
+    statusEl.textContent = `Erreur : ${err.message}`;
+    statusEl.className = 'infer-status error';
+  } finally {
+    inferState.running = false;
+    updateRunBtn();
+  }
+}
+
+function showInferResults(data) {
+  const row = $('infer-results-row');
+  row.innerHTML = '';
+
+  const items = [
+    ...data.lr_inputs.map((b64, i) => ({
+      label: `LR ${i + 1}${i >= data.n_frames ? ' (dupliquée)' : ''}`,
+      b64,
+    })),
+    { label: 'MTA (condition)', b64: data.condition },
+    { label: 'SR — Résultat', b64: data.sr, highlight: true },
+  ];
+
+  items.forEach(({ label, b64, highlight }) => {
+    const wrap = document.createElement('div');
+    wrap.className = 'infer-img-wrap' + (highlight ? ' highlight' : '');
+
+    const lbl = document.createElement('div');
+    lbl.className = 'infer-img-label';
+    lbl.textContent = label;
+
+    const img = document.createElement('img');
+    img.src = `data:image/png;base64,${b64}`;
+    img.alt = label;
+
+    wrap.appendChild(lbl);
+    wrap.appendChild(img);
+    row.appendChild(wrap);
+  });
+
+  $('infer-results').classList.remove('hidden');
+}
