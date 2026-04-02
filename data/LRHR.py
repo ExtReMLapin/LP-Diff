@@ -37,64 +37,58 @@ class LRHRDataset(Dataset):
             self.lr = self.lr[:data_len]
             self.hr = self.hr[:data_len]
 
-        # if self.opt.mode == 'train':
-        self.transform_fn1 = aug.get_transforms(size=(height, width))
-        self.transform_fn2 = aug.get_transforms(size=(height, width))
-        self.transform_fn3 = aug.get_transforms(size=(height, width))
         self.transform_fn = aug.get_transforms(size=(height, width))
-
         self.normalize_fn = aug.get_normalize()
         logger.info(f'Dataset has been created with {len(self.lr)} samples')
-        
+
     def extract_number(self, file_path):
         match = re.search(r'img_(\d+).jpg', os.path.basename(file_path))
         if match:
             return int(match.group(1))
         else:
-            print('Sort Error at: ', file_path)
-            return -1
+            raise ValueError(f"Cannot extract image number from: {file_path}")
 
 
     def __len__(self):
         return len(self.lr)
 
     def __getitem__(self, idx):
-        # print(self.lr[idx][0], self.lr[idx][1], self.lr[idx][2], self.hr[idx])
-        assert len(self.lr[idx]) != 0, f'Not enough LR images for index {idx}: {self.lr[idx]} found, expected at least 1.'
+        assert len(self.lr[idx]) != 0, f'Not enough LR images for index {idx}: {self.lr[idx]} found'
         n = len(self.lr[idx])
+        # Select up to 3 frames uniformly, padding with last frame if needed
         if n == 1:
-            sample_id1, sample_id2, sample_id3 = 0, 0, 0
+            indices = [0, 0, 0]
         elif n == 2:
-            sample_id1, sample_id2, sample_id3 = 0, 1, 1
+            indices = [0, 1, 1]
         else:
-            sample_id1, sample_id2, sample_id3 = sorted(random.sample(range(n), 3))
-        lr_image_1 = Image.open(self.lr[idx][sample_id1])
-        lr_image_2 = Image.open(self.lr[idx][sample_id2])
-        lr_image_3 = Image.open(self.lr[idx][sample_id3])        
+            indices = sorted(random.sample(range(n), 3))
+
+        lr_images = [Image.open(self.lr[idx][i]) for i in indices]
         hr_image = Image.open(self.hr[idx])
-        lr_image_1 = np.array(lr_image_1)
-        lr_image_2 = np.array(lr_image_2)
-        lr_image_3 = np.array(lr_image_3)
+
+        # Convert to numpy
+        lr_images = [np.array(img) for img in lr_images]
         hr_image = np.array(hr_image)
 
-        lr_image_1 = self.transform_fn1(lr_image_1)
-        lr_image_2 = self.transform_fn2(lr_image_2)
-        lr_image_3 = self.transform_fn3(lr_image_3)
+        # Apply transforms (reusing same transform function)
+        lr_images = [self.transform_fn(img) for img in lr_images]
         hr_image = self.transform_fn(hr_image)
-        
-        lr_image_1 = self.normalize_fn(lr_image_1)
-        lr_image_2 = self.normalize_fn(lr_image_2)
-        lr_image_3 = self.normalize_fn(lr_image_3)
+
+        # Normalize
+        lr_images = [self.normalize_fn(img) for img in lr_images]
         hr_image = self.normalize_fn(hr_image)
 
-        lr_image_1 = transforms.ToTensor()(lr_image_1)
-        lr_image_2 = transforms.ToTensor()(lr_image_2)
-        lr_image_3 = transforms.ToTensor()(lr_image_3)
+        # Convert to tensors
+        lr_images = [transforms.ToTensor()(img) for img in lr_images]
         hr_image = transforms.ToTensor()(hr_image)
 
-        # return {'LR1': lr_image_1, 'LR2': lr_image_2, 'LR3': lr_image_3, 'HR': hr_image, 
-        #         'LR1_path': self.lr[idx][0], 'LR2_path': self.lr[idx][1], 'LR3_path': self.lr[idx][2], 'HR_path': self.hr[idx]}
-        return {'LR1': lr_image_1, 'LR2': lr_image_2, 'LR3': lr_image_3, 'HR': hr_image, 'path': self.hr[idx]} 
+        return {
+            'LR1': lr_images[0],
+            'LR2': lr_images[1],
+            'LR3': lr_images[2],
+            'HR': hr_image,
+            'path': self.hr[idx]
+        }
 
     def load_data(self):
         dataloader = torch.utils.data.DataLoader(

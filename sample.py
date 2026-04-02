@@ -103,7 +103,7 @@ if __name__ == "__main__":
                         opt['model']['beta_schedule']['val'], schedule_phase='val')
 
                     for idx in range(sample_sum):
-                        diffusion.sample(continous=False)
+                        diffusion.sample(continuous=False)
                         visuals = diffusion.get_current_visuals(sample=True)
                         sample_img = Metrics.tensor2img(
                             visuals['SAM'])  # uint8
@@ -139,7 +139,7 @@ if __name__ == "__main__":
         sample_imgs = []
         for idx in range(sample_sum):
             idx += 1
-            diffusion.sample(continous=True)
+            diffusion.sample(continuous=True)
             visuals = diffusion.get_current_visuals(sample=True)
 
             show_img_mode = 'grid'

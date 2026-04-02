@@ -90,16 +90,6 @@ class GaussianDiffusion(nn.Module):
         self.conditional = conditional
 
         self.MTA = MTA(in_channel=3, out_channel=3)
-        
-        
-        # self.cnn = SimpleCNN(scale_factor=4)
-        # self.cnn.load_state_dict(torch.load('/home/lyu4/ssy/'
-        #                                     'Image-Super-Resolution-via-Iterative-Refinement-master/'
-        #                                     'pretrain_CNN/cnn_weights.pth'))
-        # self.cnn.eval()
-        # for name, para in self.cnn.named_parameters():
-        #     # CNN weights are all frozen
-        #     para.requires_grad_(False)
 
         if schedule_opt is not None:
             pass
@@ -203,7 +193,7 @@ class GaussianDiffusion(nn.Module):
 
     @torch.no_grad()
     # 采样时输入的data时condition
-    def p_sample_loop(self, x_in, continous=False):
+    def p_sample_loop(self, x_in, continuous=False):
         device = self.betas.device
         sample_inter = (1 | (self.num_timesteps // 10))
         if not self.conditional:
@@ -223,22 +213,22 @@ class GaussianDiffusion(nn.Module):
             for i in tqdm(reversed(range(0, self.num_timesteps)), desc='sampling loop time step',
                           total=self.num_timesteps):
                 img = self.p_sample(img, i, condition_x=x)
-                if continous and i % sample_inter == 0:
+                if continuous and i % sample_inter == 0:
                     ret_img = torch.cat([ret_img, img], dim=0)
-        if continous:
+        if continuous:
             return ret_img + x_in
         else:
             return img + x_in
 
     @torch.no_grad()
-    def sample(self, batch_size=1, continous=False):
+    def sample(self, batch_size=1, continuous=False):
         image_size = self.image_size
         channels = self.channels
-        return self.p_sample_loop((batch_size, channels, image_size, image_size), continous)
+        return self.p_sample_loop((batch_size, channels, image_size, image_size), continuous)
 
     @torch.no_grad()
-    def super_resolution(self, x_in, continous=False):
-        return self.p_sample_loop(x_in, continous)
+    def super_resolution(self, x_in, continuous=False):
+        return self.p_sample_loop(x_in, continuous)
 
     def q_sample(self, x_start, continuous_sqrt_alpha_cumprod, noise=None):
         noise = default(noise, lambda: torch.randn_like(x_start))

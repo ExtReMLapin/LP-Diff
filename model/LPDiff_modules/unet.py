@@ -175,6 +175,10 @@ class UNet(nn.Module):
     ):
         super().__init__()
 
+        # Validate image_size is compatible with architecture
+        if image_size % 16 != 0:
+            raise ValueError(f"image_size must be multiple of 16, got {image_size}")
+
         if with_noise_level_emb:
             noise_level_channel = inner_channel
             self.noise_level_mlp = nn.Sequential(

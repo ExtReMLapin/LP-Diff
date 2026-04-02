@@ -175,7 +175,7 @@ if __name__ == "__main__":
                     opt['model']['beta_schedule']['val'], schedule_phase='val')
                 for _,  val_data in enumerate(val_loader):
                     diffusion.feed_data(val_data)
-                    loss = diffusion.test(continous=False)
+                    loss = diffusion.test(continuous=False)
                     visuals = diffusion.get_current_visuals()
                     bs = visuals['HR'].shape[0]
                     avg_val_loss += loss * bs
@@ -275,7 +275,7 @@ if __name__ == "__main__":
         for _,  val_data in enumerate(val_loader):
             idx += 1
             diffusion.feed_data(val_data)
-            diffusion.test(continous=True)
+            diffusion.test(continuous=True)
             visuals = diffusion.get_current_visuals()
 
             hr_img = Metrics.tensor2img(visuals['HR'])  # uint8

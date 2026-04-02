@@ -252,16 +252,9 @@ class SobelModule(nn.Module):
         self.softmax = nn.Softmax(dim=0)
 
     def apply_sobel(self, input):
-        batch_size, channels, height, width = input.shape
-        sobel_x_out = []
-        sobel_y_out = []
-        for c in range(channels):
-            x_out = self.sobel_x(input[:, c:c+1, :, :])
-            y_out = self.sobel_y(input[:, c:c+1, :, :])
-            sobel_x_out.append(x_out)
-            sobel_y_out.append(y_out)
-        sobel_x_out = torch.cat(sobel_x_out, dim=1)
-        sobel_y_out = torch.cat(sobel_y_out, dim=1)
+        # Process all channels in parallel using groups parameter
+        sobel_x_out = F.conv2d(input, self.sobel_x.weight, groups=input.shape[1])
+        sobel_y_out = F.conv2d(input, self.sobel_y.weight, groups=input.shape[1])
         return sobel_x_out, sobel_y_out
 
     def forward(self, f1, f2):

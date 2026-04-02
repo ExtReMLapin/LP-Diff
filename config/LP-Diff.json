@@ -1,15 +1,12 @@
 {
     "name": "LP-Diff",
-    "phase": "train", // train or val
-    "gpu_ids": [
-        0
-    ],
-    "path": { //set the path
+    "phase": "train",
+    "gpu_ids": [0],
+    "path": {
         "log": "logs",
         "tb_logger": "tb_logger",
         "results": "results",
         "checkpoint": "checkpoint",
-        //pretrain model or training state
         "resume_state": "./I1000000_E3047"
     },
     "datasets": {
@@ -46,13 +43,11 @@
                 8,      
                 8    
             ],
-            "attn_res": [
-                16
-            ],
+            "attn_res": [16],
             "res_blocks": 2,
             "dropout": 0.1
         },
-        "beta_schedule": { // use munual beta_schedule for acceleration
+        "beta_schedule": {
             "train": {
                 "schedule": "linear",
                 "n_timestep": 1000,
@@ -67,9 +62,9 @@
             }
         },
         "diffusion": {
-            "image_size": 128,
-            "channels": 3, //sample channel
-            "conditional": true // unconditional generation or unconditional generation(super_resolution)
+            "image_size": 224,
+            "channels": 3,
+            "conditional": true
         }
     },
     "train": {

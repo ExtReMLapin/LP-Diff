@@ -60,8 +60,8 @@ class DDPM(BaseModel):
             if opt['train']['resume_training']:
                 self.load_network()
             if opt['train']["use_prerain_MTA"]:
-                checkpoint_path = opt['train']['MTA']  
-                checkpoint = torch.load(checkpoint_path)
+                checkpoint_path = opt['train']['MTA']
+                checkpoint = torch.load(checkpoint_path, weights_only=True)
                 if isinstance(self.netG, (nn.DataParallel, nn.parallel.DistributedDataParallel)):
                     self.netG.module.MTA.load_state_dict(checkpoint['model_state_dict'])
                 else:
@@ -69,11 +69,6 @@ class DDPM(BaseModel):
                 print('Load MTA pretrained model successfully!')
         else:
             self.load_network()
-        # print('after MTA load', self.netG.MTA.encoder.encoder[0].weight[-1])
-        
-        #self.load_network() 
-        #self.print_network()
-        
 
     def feed_data(self, data):
         self.data = self.set_device(data)
@@ -82,12 +77,15 @@ class DDPM(BaseModel):
         self.optG.zero_grad(set_to_none=True)
         with autocast(device_type='cuda', dtype=torch.bfloat16):
             l_pix, l_diffusion, l_mta = self.netG(self.data)
-            b, c, h, w = self.data['HR'].shape
-            norm = int(b * c * h * w)
-            l_pix = l_pix.sum() / norm
-            l_diffusion = l_diffusion.sum() / norm
-            l_mta = l_mta.sum() / norm
-        l_pix.backward()
+            b = self.data['HR'].shape[0]
+            # Losses already have reduction='sum' in diffusion.py, just normalize by batch
+            l_pix = l_pix / b
+            l_diffusion = l_diffusion / b
+            l_mta = l_mta / b
+            # Combine all losses with lambda_mta weight
+            lambda_mta = self.opt['train'].get('lambda_mta', 1.0)
+            l_total = l_pix + l_diffusion + lambda_mta * l_mta
+        l_total.backward()
         torch.nn.utils.clip_grad_norm_(self.netG.parameters(), max_norm=1.0)
         self.optG.step()
         if hasattr(self, 'scheduler'):
@@ -97,39 +95,37 @@ class DDPM(BaseModel):
         self.log_dict['l_pix'] = l_pix.item()
         self.log_dict['l_diffusion'] = l_diffusion.item()
         self.log_dict['l_mta'] = l_mta.item()
+        self.log_dict['l_total'] = l_total.item()
         self.log_dict['lr'] = self.optG.param_groups[0]['lr']
 
-    def test(self, continous=False):
+    def test(self, continuous=False):
         self.netG.eval()
         with torch.no_grad():
+            # Use LR_seq if available, fallback to LR1/2/3 for backward compatibility
+            if 'LR_seq' in self.data:
+                lr_input = self.data['LR_seq']
+            else:
+                lr_input = torch.stack([self.data['LR1'], self.data['LR2'], self.data['LR3']], dim=1)
             if isinstance(self.netG, (nn.DataParallel, nn.parallel.DistributedDataParallel)):
                 self.SR = self.netG.module.super_resolution(
-                    self.netG.module.MTA(self.data['LR1'], self.data['LR2'], self.data['LR3']), continous)
+                    self.netG.module.MTA(*lr_input.unbind(1)), continuous)
             else:
                 self.SR = self.netG.super_resolution(
-                    self.netG.MTA(self.data['LR1'], self.data['LR2'], self.data['LR3']), continous)
+                    self.netG.MTA(*lr_input.unbind(1)), continuous)
         mse_loss = nn.MSELoss()
         loss = mse_loss(self.SR, self.data['HR'])
-        
-        self.netG.train()
-        
-        return loss
-                
-        
 
-    # def denormalize(tensor, mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]):
-    #     mean = torch.tensor(mean).view(1, 3, 1, 1).to(tensor.device)
-    #     std = torch.tensor(std).view(1, 3, 1, 1).to(tensor.device)
-    #     tensor = tensor * std + mean
-    #     return torch.clamp(tensor, 0, 1)
-    
-    def sample(self, batch_size=1, continous=False):
+        self.netG.train()
+
+        return loss
+
+    def sample(self, batch_size=1, continuous=False):
         self.netG.eval()
         with torch.no_grad():
             if isinstance(self.netG, (nn.DataParallel, nn.parallel.DistributedDataParallel)):
-                self.SR = self.netG.module.sample(batch_size, continous)
+                self.SR = self.netG.module.sample(batch_size, continuous)
             else:
-                self.SR = self.netG.sample(batch_size, continous)
+                self.SR = self.netG.sample(batch_size, continuous)
         self.netG.train()
 
     def set_loss(self):
@@ -150,7 +146,7 @@ class DDPM(BaseModel):
     def get_current_log(self):
         return self.log_dict
 
-    def get_current_visuals(self, need_LR=True, sample=False):
+    def get_current_visuals(self, sample=False):
         out_dict = OrderedDict()
         if sample:
             out_dict['SAM'] = self.SR.detach().float().cpu()
@@ -161,11 +157,6 @@ class DDPM(BaseModel):
             out_dict['LR1'] = self.data['LR1'].detach().float().cpu()
             out_dict['LR2'] = self.data['LR2'].detach().float().cpu()
             out_dict['LR3'] = self.data['LR3'].detach().float().cpu()
-            # out_dict['middle'] = self.netG.MTA(self.data['LR1'], self.data['LR2'], self.data['LR3']).detach().float().cpu()
-            # if need_LR and 'LR' in self.data:
-            #     out_dict['LR'] = self.data['LR'].detach().float().cpu()
-            # else:
-            #     out_dict['LR'] = self.data['LR'].detach().float().cpu()
         return out_dict
 
     def print_network(self):
@@ -284,12 +275,12 @@ class DDPM(BaseModel):
             if isinstance(self.netG, (nn.DataParallel, nn.parallel.DistributedDataParallel)):
                 network = network.module
             network.load_state_dict(torch.load(
-                gen_path), strict=(not self.opt['model']['finetune_norm']))
+                gen_path, weights_only=True), strict=(not self.opt['model']['finetune_norm']))
             # network.load_state_dict(torch.load(
             #     gen_path), strict=False)
             if self.opt['phase'] == 'train':
                 # optimizer
-                opt = torch.load(opt_path)
+                opt = torch.load(opt_path, weights_only=True)
                 self.optG.load_state_dict(opt['optimizer'])
                 if opt.get('scheduler') is not None and hasattr(self, 'scheduler'):
                     self.scheduler.load_state_dict(opt['scheduler'])
