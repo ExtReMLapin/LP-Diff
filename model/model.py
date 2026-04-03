@@ -21,8 +21,10 @@ class DDPM(BaseModel):
         self.schedule_phase = None
         if opt['distributed']:
             assert torch.cuda.is_available()
+            # If MTA is frozen, we must enable find_unused_parameters so DDP doesn't wait for gradients from MTA
+            find_unused = opt['train'].get('freeze_MTA', False)
             self.netG = nn.parallel.DistributedDataParallel(
-                self.netG, device_ids=[self.local_rank], find_unused_parameters=False)
+                self.netG, device_ids=[self.local_rank], find_unused_parameters=find_unused)
 
         # set loss and load resume state
         self.set_loss()
@@ -47,7 +49,16 @@ class DDPM(BaseModel):
                         logger.info(
                             'Params [{:s}] initialized to 0 and will optimize.'.format(k))
             else:
-                optim_params = list(self.netG.parameters())
+                if opt['train'].get('freeze_MTA', False):
+                    if isinstance(self.netG, (nn.DataParallel, nn.parallel.DistributedDataParallel)):
+                        for param in self.netG.module.MTA.parameters():
+                            param.requires_grad = False
+                    else:
+                        for param in self.netG.MTA.parameters():
+                            param.requires_grad = False
+                    logger.info("MTA parameters are frozen. Only optimizing diffusion network.")
+                
+                optim_params = [p for p in self.netG.parameters() if p.requires_grad]
 
             self.optG = torch.optim.Adam(
                 optim_params, lr=opt['train']["optimizer"]["lr"], fused=True)
@@ -62,10 +73,20 @@ class DDPM(BaseModel):
             if opt['train']["use_prerain_MTA"]:
                 checkpoint_path = opt['train']['MTA']
                 checkpoint = torch.load(checkpoint_path, weights_only=True)
+                
+                # Handle `_orig_mod.` prefix added by torch.compile in MTA training
+                mta_state_dict = checkpoint['model_state_dict']
+                clean_state_dict = {}
+                for k, v in mta_state_dict.items():
+                    if k.startswith('_orig_mod.'):
+                        clean_state_dict[k[len('_orig_mod.'):]] = v
+                    else:
+                        clean_state_dict[k] = v
+
                 if isinstance(self.netG, (nn.DataParallel, nn.parallel.DistributedDataParallel)):
-                    self.netG.module.MTA.load_state_dict(checkpoint['model_state_dict'])
+                    self.netG.module.MTA.load_state_dict(clean_state_dict)
                 else:
-                    self.netG.MTA.load_state_dict(checkpoint['model_state_dict'])
+                    self.netG.MTA.load_state_dict(clean_state_dict)
                 print('Load MTA pretrained model successfully!')
         else:
             self.load_network()
