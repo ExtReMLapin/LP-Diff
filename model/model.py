@@ -16,7 +16,7 @@ class DDPM(BaseModel):
         super(DDPM, self).__init__(opt)
         # define network and load pretrained models
         self.netG = self.set_device(networks.define_G(opt))
-
+        self.netG = torch.compile(self.netG, mode="default")
 
         self.schedule_phase = None
         if opt['distributed']:
