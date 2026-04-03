@@ -111,7 +111,7 @@ _RE_TRAIN_AVG = re.compile(
 )
 _RE_TRAIN_DETAIL = re.compile(
     r"<epoch:\s*(\d+), iter:\s*([\d,]+)>\s+"
-    r"l_pix:\s*([\d.e+\-]+)\s+l_diffusion:\s*([\d.e+\-]+)\s+l_mta:\s*([\d.e+\-]+)\s+lr:\s*([\d.e+\-]+)"
+    r"l_pix:\s*([\d.e+\-]+)\s+l_diffusion:\s*([\d.e+\-]+)\s+l_mta:\s*([\d.e+\-]+)\s+l_total:\s*([\d.e+\-]+)\s+lr:\s*([\d.e+\-]+)"
 )
 _RE_VAL = re.compile(
     r"<epoch:\s*(\d+), iter:\s*([\d,]+)>\s+psnr:\s*([\d.e+\-]+)\s+loss:\s*([\d.e+\-]+)"
@@ -150,9 +150,9 @@ def experiment_metrics(exp: str):
         {
             "epoch": int(e), "iter": int(i.replace(",", "")),
             "l_pix": float(lp), "l_diffusion": float(ld),
-            "l_mta": float(lm), "lr": float(lr),
+            "l_mta": float(lm), "l_total": float(lt), "lr": float(lr),
         }
-        for e, i, lp, ld, lm, lr in _parse_log(train_log, _RE_TRAIN_DETAIL)
+        for e, i, lp, ld, lm, lt, lr in _parse_log(train_log, _RE_TRAIN_DETAIL)
     ]
 
     # validation metrics

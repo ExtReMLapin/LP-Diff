@@ -355,6 +355,7 @@ function buildCharts(metrics) {
           { label: 'l_pix',       data: metrics.train_detail.map(r => r.l_pix),       borderColor: '#34d399', backgroundColor: 'transparent', pointRadius: 1, borderWidth: 1.5, yAxisID: 'y' },
           { label: 'l_diffusion', data: metrics.train_detail.map(r => r.l_diffusion), borderColor: '#fb7185', backgroundColor: 'transparent', pointRadius: 1, borderWidth: 1.5, yAxisID: 'y' },
           { label: 'l_mta',       data: metrics.train_detail.map(r => r.l_mta),       borderColor: '#fbbf24', backgroundColor: 'transparent', pointRadius: 1, borderWidth: 1.5, yAxisID: 'y' },
+          { label: 'l_total',     data: metrics.train_detail.map(r => r.l_total),     borderColor: '#a855f7', backgroundColor: 'transparent', pointRadius: 1, borderWidth: 1.5, yAxisID: 'y' },
         ],
       },
       options: {
