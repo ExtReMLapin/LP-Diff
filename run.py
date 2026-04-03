@@ -160,7 +160,8 @@ if __name__ == "__main__":
 
             # end-of-epoch validation (after warm-up)
             warm_up = opt['train'].get('val_warmup_epochs', 5)
-            if current_epoch >= warm_up:
+            val_epochs = opt['train'].get('val_check_epochs', 1)
+            if current_epoch >= warm_up and (current_epoch - warm_up) % val_epochs == 0:
                 if world_size > 1:
                     dist.barrier()
 
