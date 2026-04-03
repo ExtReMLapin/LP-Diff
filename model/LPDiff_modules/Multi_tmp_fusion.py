@@ -412,7 +412,7 @@ class CrossAttentionLayer(nn.Module):
         f1 = f1.view(batch_size, self.d_model, -1).transpose(1, 2)
         f2 = f2.view(batch_size, self.d_model, -1).transpose(1, 2)
         # f2 is query, f1 is key/value (cross-attention: f2 attends into f1)
-        output, _ = self.attn(query=f2, key=f1, value=f1, key_padding_mask=mask)
+        output, _ = self.attn(query=f2, key=f1, value=f1, key_padding_mask=mask, need_weights=False)
         output = self.norm1(output + f2)
         ff_output = self.fc2(F.relu(self.fc1(output)))
         output = self.norm2(ff_output + output)
