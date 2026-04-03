@@ -209,16 +209,16 @@ class GaussianDiffusion(nn.Module):
             x = x_in
             shape = x.shape
             img = torch.randn(shape, device=device)
-            ret_img = x
+            ret_img = img
             for i in tqdm(reversed(range(0, self.num_timesteps)), desc='sampling loop time step',
                           total=self.num_timesteps):
                 img = self.p_sample(img, i, condition_x=x)
                 if continuous and i % sample_inter == 0:
                     ret_img = torch.cat([ret_img, img], dim=0)
         if continuous:
-            return ret_img + x_in
+            return ret_img
         else:
-            return img + x_in
+            return img
 
     @torch.no_grad()
     def sample(self, batch_size=1, continuous=False):
@@ -242,7 +242,9 @@ class GaussianDiffusion(nn.Module):
     # x_in['SR'] is the predicted image of CNN
     def p_losses(self, x_in, noise=None):
         condition = self.MTA(x_in['LR1'], x_in['LR2'], x_in['LR3'])
-        x_start = x_in['HR'] - condition
+        
+        # Option 2: Diffuse HR directly, using MTA condition as UNet input
+        x_start = x_in['HR']
         
         # cnn_prediction = x_in['SR']
         # x_start = x_in['HR'] - cnn_prediction
