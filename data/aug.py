@@ -2,9 +2,9 @@ import albumentations as albu
 
 def get_transforms(size):
     pipeline = albu.Compose([
+        albu.Resize(height=size[0], width=size[1]),
         albu.HorizontalFlip(p=0.5),
-        albu.ShiftScaleRotate(shift_limit=0.05, scale_limit=0.05, rotate_limit=5, p=0.5),
-        albu.Resize(height=size[0], width=size[1])
+        albu.ShiftScaleRotate(shift_limit=0.05, scale_limit=0.05, rotate_limit=5, p=0.5)
     ], additional_targets={'image1': 'image', 'image2': 'image', 'image3': 'image'}, is_check_shapes=False)
 
     def process(hr, lr1, lr2, lr3):

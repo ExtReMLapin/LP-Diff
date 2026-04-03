@@ -37,7 +37,10 @@ class LRHRDataset(Dataset):
             self.lr = self.lr[:data_len]
             self.hr = self.hr[:data_len]
 
-        self.transform_fn = aug.get_transforms(size=(height, width))
+        if phase == 'train':
+            self.transform_fn = aug.get_transforms(size=(height, width))
+        else:
+            self.transform_fn = aug.get_transforms_fortest(size=(height, width))
         self.normalize_fn = aug.get_normalize()
         logger.info(f'Dataset has been created with {len(self.lr)} samples')
 
