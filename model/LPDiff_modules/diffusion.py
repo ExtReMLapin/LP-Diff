@@ -248,15 +248,20 @@ class GaussianDiffusion(nn.Module):
         # x_start = x_in['HR'] - cnn_prediction
         # x_start = x_in['HR']
         [b, c, h, w] = x_start.shape
-        t = np.random.randint(1, self.num_timesteps + 1)
-        low = float(self.sqrt_alphas_cumprod_prev[t])
-        high = float(self.sqrt_alphas_cumprod_prev[t - 1])
-        continuous_sqrt_alpha_cumprod = torch.empty(b, 1, device=x_start.device).uniform_(low, high)
+        
+        t = torch.randint(1, self.num_timesteps + 1, (b,))
+        sqrt_alphas_cumprod_prev_tensor = torch.tensor(self.sqrt_alphas_cumprod_prev, dtype=torch.float32)
+        low = sqrt_alphas_cumprod_prev_tensor[t].to(x_start.device)
+        high = sqrt_alphas_cumprod_prev_tensor[t - 1].to(x_start.device)
+        
+        continuous_sqrt_alpha_cumprod = torch.empty(b, device=x_start.device).uniform_(0, 1)
+        continuous_sqrt_alpha_cumprod = low + continuous_sqrt_alpha_cumprod * (high - low)
+        continuous_sqrt_alpha_cumprod = continuous_sqrt_alpha_cumprod.view(b, 1, 1, 1)
 
         noise = default(noise, lambda: torch.randn_like(x_start))
         x_noisy = self.q_sample(
             x_start=x_start,
-            continuous_sqrt_alpha_cumprod=continuous_sqrt_alpha_cumprod.view(-1, 1, 1, 1), noise=noise)
+            continuous_sqrt_alpha_cumprod=continuous_sqrt_alpha_cumprod, noise=noise)
 
         if not self.conditional:
             x_recon = self.denoise_fn(x_noisy, continuous_sqrt_alpha_cumprod)

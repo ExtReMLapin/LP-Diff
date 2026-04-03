@@ -84,7 +84,7 @@ class DDPM(BaseModel):
             l_mta = l_mta / b
             # Combine all losses with lambda_mta weight
             lambda_mta = self.opt['train'].get('lambda_mta', 1.0)
-            l_total = l_pix + l_diffusion + lambda_mta * l_mta
+            l_total = l_pix # l_pix already contains the total sum returned by diffusion.py
         l_total.backward()
         torch.nn.utils.clip_grad_norm_(self.netG.parameters(), max_norm=1.0)
         self.optG.step()

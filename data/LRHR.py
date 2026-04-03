@@ -70,9 +70,9 @@ class LRHRDataset(Dataset):
         lr_images = [np.array(img) for img in lr_images]
         hr_image = np.array(hr_image)
 
-        # Apply transforms (reusing same transform function)
-        lr_images = [self.transform_fn(img) for img in lr_images]
-        hr_image = self.transform_fn(hr_image)
+        # Apply transforms (synchronously for all frames)
+        hr_image, lr_1, lr_2, lr_3 = self.transform_fn(hr_image, lr_images[0], lr_images[1], lr_images[2])
+        lr_images = [lr_1, lr_2, lr_3]
 
         # Normalize
         lr_images = [self.normalize_fn(img) for img in lr_images]

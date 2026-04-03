@@ -3,3 +3,5 @@ venv/
 *.pyc
 *.log
 experiments/
+.claude/
+.claude-flow/
