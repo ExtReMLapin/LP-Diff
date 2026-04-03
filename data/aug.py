@@ -4,6 +4,7 @@ def get_transforms(size):
     pipeline = albu.Compose([
         albu.Resize(height=size[0], width=size[1]),
         albu.HorizontalFlip(p=0.5),
+        albu.VerticalFlip(p=0.5),
         albu.ShiftScaleRotate(shift_limit=0.05, scale_limit=0.05, rotate_limit=5, p=0.5),
         albu.Perspective(scale=(0.02, 0.08), p=0.3),
         albu.OneOf([
