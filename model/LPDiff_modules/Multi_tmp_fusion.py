@@ -83,6 +83,7 @@ class Decoder(nn.Module):
             nn.BatchNorm2d(16),
             nn.ReLU(inplace=True),
             nn.ConvTranspose2d(16, 3, kernel_size=3, stride=2, padding=1, output_padding=1),
+            nn.Tanh()
         )
 
     def forward(self, x):
